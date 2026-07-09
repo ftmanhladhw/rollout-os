@@ -1,0 +1,51 @@
+# CLAUDE.md — Rollout OS
+
+Project guide for Claude Code sessions in this repo. Read this first.
+
+## What this is
+
+**Rollout OS** is a greenfield, domain-agnostic product for running **staggered, multi-tenant software rollouts** — standing up a product across many teams, partners, or customers, where each unit advances independently through a defined delivery lifecycle. It generalizes the "one tracker → everything derived" operating model into a reusable platform.
+
+> **Status: foundation only. No application code has been written yet.** `src/index.ts` is a deliberate `export {}` placeholder that keeps the build green until real modules land. Do not add feature code unless the task explicitly asks for it.
+
+## Core product concepts (the reusable model)
+
+These are the pillars the product is built around. They are domain-agnostic by design:
+
+- **Configurable rollout lifecycle** — a definable state machine (e.g. Preparation → Onboarding → Training → Migration → Pilot → Go Live → Hypercare → Stabilization → BAU), with gates between stages. Stages are configuration, not hardcoded.
+- **Rollout unit grid** — one row per _Workstream × Tenant_, each advancing independently.
+- **Single source of truth** — status lives in exactly one place; dashboards, roadmaps, and reports are pure projections of it.
+- **Unified action register** — actions, issues, risks, and decisions in one place with SLA-driven prioritization.
+- **Governance & cadence engine** — configurable meeting rhythms, escalation tiers, and exit criteria.
+- **Terminology layer** — every label (tenant, workstream, stage) is relabelable per vertical, so no domain concept is hardcoded.
+
+## Design partner ≠ product (hard rule)
+
+The **Amazon CSR** implementation was the **design partner only** — the source we reverse-engineered the reusable rollout model from. **Never hardcode** Amazon / CSR / mGrant / mForm / specific programmes / partners / dates into the product. Anything domain-specific is **config or seed data**, not schema or code.
+
+## Tech foundation
+
+TypeScript (ESM, strict) · ESLint 9 flat config + `typescript-eslint` · Prettier · Husky · lint-staged · commitlint (Conventional Commits) · GitHub Actions CI. Node `>= 20` (see `.nvmrc`).
+
+| Script                 | Purpose                     |
+| ---------------------- | --------------------------- |
+| `npm run build`        | Compile TypeScript (`tsc`)  |
+| `npm run typecheck`    | Type-check without emitting |
+| `npm run lint`         | ESLint                      |
+| `npm run lint:fix`     | ESLint with autofix         |
+| `npm run format`       | Prettier write              |
+| `npm run format:check` | Prettier check (CI)         |
+
+## Workflow & conventions (enforced)
+
+- **Branch → PR → green CI → merge.** No direct pushes to `main`.
+- Branch names: `feat/…`, `fix/…`, `docs/…`, `chore/…`.
+- Commit messages **must** follow [Conventional Commits](https://www.conventionalcommits.org/) — enforced by the `commit-msg` hook locally and by commitlint in CI. Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+- Before pushing: `npm run format:check && npm run lint && npm run build` all pass.
+- See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow.
+
+## Environment notes
+
+- A global safety-guard hook blocks literal `git push …main/master` and force-pushes — always work on a feature branch and merge via PR.
+- `dist/` is git-ignored build output; `package-lock.json` is committed.
+- Repo: https://github.com/ftmanhladhw/rollout-os (private).
