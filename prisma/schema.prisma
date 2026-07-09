@@ -4,9 +4,22 @@
 // `DATABASE_URL` is the pooled connection used by the app at runtime.
 // `DIRECT_URL` is the direct connection used for migrations.
 //
-// No domain models are defined yet — only auth infrastructure. Domain models
-// (Organization, Rollout, Programme, Workstream, Milestone, Task, …) will be
-// added here in a later phase, following the Architecture Specification.
+// Design record: docs/09_database_design.md. Key conventions:
+// - uuid PKs (`gen_random_uuid()`), snake_case table/column names via @map.
+// - Every operational table carries `rollout_id` (deliberate denormalization
+//   for single-join RLS and cross-cutting views; consistency enforced in the
+//   service layer).
+// - Soft delete via `deleted_at` (mistake recovery) — distinct from the
+//   `archived` lifecycle status (intentional end-state). Join tables and
+//   append-only tables hard-delete.
+// - `created_by`/`updated_by` are plain uuids (auth.uid()), intentionally
+//   without FK/relation: they are audit metadata, not navigable domain
+//   relationships, and must survive user deletion.
+// - Polymorphic references (decisions, dependencies, activity, notifications)
+//   use `EntityType` + uuid without FK; integrity is service-layer enforced.
+// - RLS policies live in the SQL migrations (see prisma/migrations/), not here.
+// - Name uniqueness for soft-deleted config tables (phases, readiness
+//   dimensions) is app-enforced — a DB unique would collide with deleted rows.
 
 generator client {
   provider = "prisma-client-js"
@@ -17,6 +30,169 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+
+// ---------------------------------------------------------------------------
+// Enums — stable value sets. Display labels are the terminology layer's job;
+// configurable sets (phases, readiness dimensions) are rows, not enums.
+// ---------------------------------------------------------------------------
+
+/// Doc 04 lifecycle: every operational entity moves through these states.
+enum LifecycleStatus {
+  draft
+  planned
+  in_progress
+  blocked
+  completed
+  archived
+
+  @@map("lifecycle_status")
+}
+
+enum Priority {
+  low
+  medium
+  high
+  critical
+
+  @@map("priority")
+}
+
+/// Manual health assessment (doc 05: "Health moves to a manual field").
+enum Health {
+  green
+  amber
+  red
+
+  @@map("health")
+}
+
+/// Manual readiness assessment per dimension.
+enum ReadinessStatus {
+  not_started
+  in_progress
+  ready
+
+  @@map("readiness_status")
+}
+
+/// Powers Client-profile filtering: `client` rows are visible to client
+/// stakeholders; `internal` rows are hidden from them (app-layer in MVP).
+enum Visibility {
+  internal
+  client
+
+  @@map("visibility")
+}
+
+enum OrgRole {
+  admin
+  member
+
+  @@map("org_role")
+}
+
+/// Doc 04 experience profiles — shape the UI, never the data.
+enum ExperienceProfile {
+  executive
+  programme_manager
+  engineering
+  consultant
+  client
+
+  @@map("experience_profile")
+}
+
+enum RiskLevel {
+  low
+  medium
+  high
+
+  @@map("risk_level")
+}
+
+/// Doc 04 document types.
+enum DocumentType {
+  prd
+  architecture
+  design
+  meeting_notes
+  kt
+  recording
+  presentation
+  spreadsheet
+  release_notes
+  contract
+  other
+
+  @@map("document_type")
+}
+
+enum UpdateType {
+  daily
+  weekly
+  executive
+
+  @@map("update_type")
+}
+
+enum DependencyType {
+  blocks
+  blocked_by
+  relates_to
+
+  @@map("dependency_type")
+}
+
+/// Target of a polymorphic reference (decisions, dependencies, activity,
+/// notifications).
+enum EntityType {
+  rollout
+  programme
+  workstream
+  milestone
+  task
+  risk
+  issue
+  decision
+  dependency
+  action_item
+  deliverable
+  document
+  meeting
+  note
+  update
+  stakeholder
+  team
+  partner
+
+  @@map("entity_type")
+}
+
+enum ActivityVerb {
+  created
+  updated
+  deleted
+  status_changed
+  assigned
+
+  @@map("activity_verb")
+}
+
+/// PRD §14 notification categories.
+enum NotificationType {
+  task_assigned
+  task_due
+  risk_updated
+  meeting_reminder
+  milestone_due
+  go_live_reminder
+
+  @@map("notification_type")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & tenancy
+// ---------------------------------------------------------------------------
 
 /// Auth infrastructure (not a domain model): 1:1 companion to `auth.users`,
 /// auto-created by the `on_auth_user_created` trigger (see supabase/setup.sql).
@@ -29,5 +205,811 @@ model Profile {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  memberships   OrganizationMember[]
+  stakeholders  Stakeholder[]
+  activities    ActivityLog[]
+  notifications Notification[]
+
   @@map("profiles")
+}
+
+/// The tenant root. One organization owns many rollouts.
+model Organization {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  slug        String    @unique
+  description String?
+  tags        String[]  @default([])
+  createdBy   String?   @map("created_by") @db.Uuid
+  updatedBy   String?   @map("updated_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  members  OrganizationMember[]
+  rollouts Rollout[]
+
+  @@index([tags], type: Gin)
+  @@map("organizations")
+}
+
+/// User ↔ organization membership. Hard-deleted (revoking access must be
+/// immediate and unambiguous); the activity log keeps the audit trail.
+model OrganizationMember {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  profileId         String            @map("profile_id") @db.Uuid
+  profile           Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  role              OrgRole           @default(member)
+  experienceProfile ExperienceProfile @default(consultant) @map("experience_profile")
+  createdBy         String?           @map("created_by") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, profileId])
+  @@index([profileId])
+  @@map("organization_members")
+}
+
+// ---------------------------------------------------------------------------
+// Structural backbone: Organization → Rollout → Programme → Workstream →
+// Milestone → Task (Domain Rules 1–4)
+// ---------------------------------------------------------------------------
+
+/// The primary operational workspace. Every operational object belongs to one
+/// rollout.
+model Rollout {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  name           String
+  description    String?
+  status         LifecycleStatus @default(draft)
+  health         Health          @default(green)
+  priority       Priority        @default(medium)
+  visibility     Visibility      @default(internal)
+  tags           String[]        @default([])
+  ownerId        String?         @map("owner_id") @db.Uuid
+  owner          Stakeholder?    @relation("RolloutOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  startDate      DateTime?       @map("start_date") @db.Date
+  goLiveDate     DateTime?       @map("go_live_date") @db.Date
+  endDate        DateTime?       @map("end_date") @db.Date
+  createdBy      String?         @map("created_by") @db.Uuid
+  updatedBy      String?         @map("updated_by") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  phases              Phase[]
+  readinessDimensions ReadinessDimension[]
+  programmes          Programme[]
+  workstreams         Workstream[]
+  milestones          Milestone[]
+  tasks               Task[]
+  risks               Risk[]
+  issues              Issue[]
+  decisions           Decision[]
+  dependencies        Dependency[]
+  actionItems         ActionItem[]
+  deliverables        Deliverable[]
+  documents           Document[]
+  meetings            Meeting[]
+  notes               Note[]
+  updates             Update[]
+  stakeholders        Stakeholder[]
+  teams               Team[]
+  partners            Partner[]
+  activityLog         ActivityLog[]
+  notifications       Notification[]
+
+  @@index([organizationId])
+  @@index([tags], type: Gin)
+  @@map("rollouts")
+}
+
+/// Cross-cutting lifecycle dimension (Domain Rule 5) — rows, not an enum:
+/// the eight doc-04 defaults are seeded per rollout and remain editable.
+model Phase {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String    @map("rollout_id") @db.Uuid
+  rollout     Rollout   @relation(fields: [rolloutId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdBy   String?   @map("created_by") @db.Uuid
+  updatedBy   String?   @map("updated_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  programmes   Programme[]
+  workstreams  Workstream[]
+  milestones   Milestone[]
+  tasks        Task[]
+  risks        Risk[]
+  issues       Issue[]
+  decisions    Decision[]
+  dependencies Dependency[]
+  actionItems  ActionItem[]
+  deliverables Deliverable[]
+  documents    Document[]
+  meetings     Meeting[]
+  notes        Note[]
+  updates      Update[]
+
+  @@index([rolloutId])
+  @@map("phases")
+}
+
+/// Manual readiness assessment (doc 04 dimensions seeded per rollout:
+/// Engineering · Documentation · Data · Security · Training · Partner ·
+/// Go Live).
+model ReadinessDimension {
+  id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId String          @map("rollout_id") @db.Uuid
+  rollout   Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Cascade)
+  name      String
+  status    ReadinessStatus @default(not_started)
+  sortOrder Int             @default(0) @map("sort_order")
+  createdBy String?         @map("created_by") @db.Uuid
+  updatedBy String?         @map("updated_by") @db.Uuid
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId])
+  @@map("readiness_dimensions")
+}
+
+/// A major business objective (doc 04).
+model Programme {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String          @map("rollout_id") @db.Uuid
+  rollout     Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  status      LifecycleStatus @default(draft)
+  priority    Priority        @default(medium)
+  visibility  Visibility      @default(internal)
+  tags        String[]        @default([])
+  ownerId     String?         @map("owner_id") @db.Uuid
+  owner       Stakeholder?    @relation("ProgrammeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId     String?         @map("phase_id") @db.Uuid
+  phase       Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  createdBy   String?         @map("created_by") @db.Uuid
+  updatedBy   String?         @map("updated_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  workstreams Workstream[]
+
+  @@index([rolloutId, status])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("programmes")
+}
+
+/// Groups operational work. Every workstream belongs to one programme
+/// (Domain Rule 2). `progress` is manual in the MVP (0–100).
+model Workstream {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String          @map("rollout_id") @db.Uuid
+  rollout     Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  programmeId String          @map("programme_id") @db.Uuid
+  programme   Programme       @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  status      LifecycleStatus @default(draft)
+  priority    Priority        @default(medium)
+  visibility  Visibility      @default(internal)
+  tags        String[]        @default([])
+  ownerId     String?         @map("owner_id") @db.Uuid
+  owner       Stakeholder?    @relation("WorkstreamOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId     String?         @map("phase_id") @db.Uuid
+  phase       Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  progress    Int             @default(0) @db.SmallInt
+  createdBy   String?         @map("created_by") @db.Uuid
+  updatedBy   String?         @map("updated_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  milestones   Milestone[]
+  deliverables Deliverable[]
+  documents    Document[]
+  meetings     Meeting[]
+
+  @@index([rolloutId, status])
+  @@index([programmeId])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("workstreams")
+}
+
+// ---------------------------------------------------------------------------
+// Operations
+// ---------------------------------------------------------------------------
+
+/// A major checkpoint. Every milestone belongs to one workstream
+/// (Domain Rule 3).
+model Milestone {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId    String          @map("rollout_id") @db.Uuid
+  rollout      Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  workstreamId String          @map("workstream_id") @db.Uuid
+  workstream   Workstream      @relation(fields: [workstreamId], references: [id], onDelete: Restrict)
+  name         String
+  description  String?
+  status       LifecycleStatus @default(draft)
+  priority     Priority        @default(medium)
+  visibility   Visibility      @default(internal)
+  tags         String[]        @default([])
+  ownerId      String?         @map("owner_id") @db.Uuid
+  owner        Stakeholder?    @relation("MilestoneOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId      String?         @map("phase_id") @db.Uuid
+  phase        Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  dueDate      DateTime?       @map("due_date") @db.Date
+  completedAt  DateTime?       @map("completed_at") @db.Timestamptz(6)
+  createdBy    String?         @map("created_by") @db.Uuid
+  updatedBy    String?         @map("updated_by") @db.Uuid
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  tasks Task[]
+
+  @@index([rolloutId, dueDate])
+  @@index([workstreamId])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("milestones")
+}
+
+/// The smallest executable unit. Every task contributes to one milestone
+/// (Domain Rule 4). `assignee` fills the universal-metadata Owner slot —
+/// a task's owner IS its assignee (see docs/09).
+model Task {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String          @map("rollout_id") @db.Uuid
+  rollout     Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  milestoneId String          @map("milestone_id") @db.Uuid
+  milestone   Milestone       @relation(fields: [milestoneId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  status      LifecycleStatus @default(draft)
+  priority    Priority        @default(medium)
+  visibility  Visibility      @default(internal)
+  tags        String[]        @default([])
+  assigneeId  String?         @map("assignee_id") @db.Uuid
+  assignee    Stakeholder?    @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  phaseId     String?         @map("phase_id") @db.Uuid
+  phase       Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  dueDate     DateTime?       @map("due_date") @db.Date
+  completedAt DateTime?       @map("completed_at") @db.Timestamptz(6)
+  createdBy   String?         @map("created_by") @db.Uuid
+  updatedBy   String?         @map("updated_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  convertedFromActionItems ActionItem[]
+
+  @@index([rolloutId, status])
+  @@index([assigneeId, status, dueDate])
+  @@index([milestoneId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("tasks")
+}
+
+/// A potential future problem. Every risk has an owner (Domain Rule 6) —
+/// `owner_id` is NOT NULL by design.
+model Risk {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String          @map("rollout_id") @db.Uuid
+  rollout     Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  status      LifecycleStatus @default(draft)
+  priority    Priority        @default(medium)
+  visibility  Visibility      @default(internal)
+  tags        String[]        @default([])
+  ownerId     String          @map("owner_id") @db.Uuid
+  owner       Stakeholder     @relation("RiskOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  phaseId     String?         @map("phase_id") @db.Uuid
+  phase       Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  probability RiskLevel       @default(medium)
+  impact      RiskLevel       @default(medium)
+  mitigation  String?
+  createdBy   String?         @map("created_by") @db.Uuid
+  updatedBy   String?         @map("updated_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, status])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("risks")
+}
+
+/// An existing problem.
+model Issue {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String          @map("rollout_id") @db.Uuid
+  rollout     Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  status      LifecycleStatus @default(draft)
+  priority    Priority        @default(medium)
+  visibility  Visibility      @default(internal)
+  tags        String[]        @default([])
+  ownerId     String?         @map("owner_id") @db.Uuid
+  owner       Stakeholder?    @relation("IssueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId     String?         @map("phase_id") @db.Uuid
+  phase       Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  resolution  String?
+  resolvedAt  DateTime?       @map("resolved_at") @db.Timestamptz(6)
+  createdBy   String?         @map("created_by") @db.Uuid
+  updatedBy   String?         @map("updated_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, status])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("issues")
+}
+
+/// A permanent record of an approved decision. References the entity it
+/// affects (Domain Rule 7) — `affects_*` is NOT NULL by design.
+model Decision {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId        String          @map("rollout_id") @db.Uuid
+  rollout          Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name             String
+  description      String?
+  status           LifecycleStatus @default(draft)
+  priority         Priority        @default(medium)
+  visibility       Visibility      @default(internal)
+  tags             String[]        @default([])
+  ownerId          String?         @map("owner_id") @db.Uuid
+  owner            Stakeholder?    @relation("DecisionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId          String?         @map("phase_id") @db.Uuid
+  phase            Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  approverId       String?         @map("approver_id") @db.Uuid
+  approver         Stakeholder?    @relation("DecisionApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  decisionDate     DateTime?       @map("decision_date") @db.Date
+  reason           String?
+  affectsEntityType EntityType     @map("affects_entity_type")
+  affectsEntityId  String          @map("affects_entity_id") @db.Uuid
+  createdBy        String?         @map("created_by") @db.Uuid
+  updatedBy        String?         @map("updated_by") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, status])
+  @@index([affectsEntityType, affectsEntityId])
+  @@index([ownerId])
+  @@index([approverId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("decisions")
+}
+
+/// A relationship between two operational entities (polymorphic both ends).
+model Dependency {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId      String          @map("rollout_id") @db.Uuid
+  rollout        Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name           String
+  description    String?
+  status         LifecycleStatus @default(draft)
+  priority       Priority        @default(medium)
+  visibility     Visibility      @default(internal)
+  tags           String[]        @default([])
+  ownerId        String?         @map("owner_id") @db.Uuid
+  owner          Stakeholder?    @relation("DependencyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId        String?         @map("phase_id") @db.Uuid
+  phase          Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  dependencyType DependencyType  @default(blocks) @map("dependency_type")
+  fromEntityType EntityType      @map("from_entity_type")
+  fromEntityId   String          @map("from_entity_id") @db.Uuid
+  toEntityType   EntityType      @map("to_entity_type")
+  toEntityId     String          @map("to_entity_id") @db.Uuid
+  createdBy      String?         @map("created_by") @db.Uuid
+  updatedBy      String?         @map("updated_by") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, status])
+  @@index([fromEntityType, fromEntityId])
+  @@index([toEntityType, toEntityId])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("dependencies")
+}
+
+/// Meeting-generated work. May be converted to a Task (the link is kept for
+/// the audit trail).
+model ActionItem {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId       String          @map("rollout_id") @db.Uuid
+  rollout         Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name            String
+  description     String?
+  status          LifecycleStatus @default(draft)
+  priority        Priority        @default(medium)
+  visibility      Visibility      @default(internal)
+  tags            String[]        @default([])
+  ownerId         String?         @map("owner_id") @db.Uuid
+  owner           Stakeholder?    @relation("ActionItemOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId         String?         @map("phase_id") @db.Uuid
+  phase           Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  meetingId       String?         @map("meeting_id") @db.Uuid
+  meeting         Meeting?        @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  dueDate         DateTime?       @map("due_date") @db.Date
+  convertedTaskId String?         @unique @map("converted_task_id") @db.Uuid
+  convertedTask   Task?           @relation(fields: [convertedTaskId], references: [id], onDelete: SetNull)
+  createdBy       String?         @map("created_by") @db.Uuid
+  updatedBy       String?         @map("updated_by") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, status])
+  @@index([ownerId])
+  @@index([meetingId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("action_items")
+}
+
+/// A physical output of the rollout.
+model Deliverable {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId    String          @map("rollout_id") @db.Uuid
+  rollout      Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  workstreamId String?         @map("workstream_id") @db.Uuid
+  workstream   Workstream?     @relation(fields: [workstreamId], references: [id], onDelete: SetNull)
+  name         String
+  description  String?
+  status       LifecycleStatus @default(draft)
+  priority     Priority        @default(medium)
+  visibility   Visibility      @default(internal)
+  tags         String[]        @default([])
+  ownerId      String?         @map("owner_id") @db.Uuid
+  owner        Stakeholder?    @relation("DeliverableOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId      String?         @map("phase_id") @db.Uuid
+  phase        Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  dueDate      DateTime?       @map("due_date") @db.Date
+  deliveredAt  DateTime?       @map("delivered_at") @db.Timestamptz(6)
+  createdBy    String?         @map("created_by") @db.Uuid
+  updatedBy    String?         @map("updated_by") @db.Uuid
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, status])
+  @@index([workstreamId])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("deliverables")
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge
+// ---------------------------------------------------------------------------
+
+/// Metadata + external reference — documents are referenced, never duplicated
+/// (Domain Rule 9). `url` is NOT NULL by design.
+model Document {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId    String          @map("rollout_id") @db.Uuid
+  rollout      Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  workstreamId String?         @map("workstream_id") @db.Uuid
+  workstream   Workstream?     @relation(fields: [workstreamId], references: [id], onDelete: SetNull)
+  name         String
+  description  String?
+  status       LifecycleStatus @default(draft)
+  priority     Priority        @default(medium)
+  visibility   Visibility      @default(internal)
+  tags         String[]        @default([])
+  ownerId      String?         @map("owner_id") @db.Uuid
+  owner        Stakeholder?    @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId      String?         @map("phase_id") @db.Uuid
+  phase        Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  url          String
+  documentType DocumentType    @default(other) @map("document_type")
+  version      String?
+  createdBy    String?         @map("created_by") @db.Uuid
+  updatedBy    String?         @map("updated_by") @db.Uuid
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, status])
+  @@index([workstreamId])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("documents")
+}
+
+/// Captures participants, summary, recording, decisions, and actions.
+model Meeting {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId    String          @map("rollout_id") @db.Uuid
+  rollout      Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  workstreamId String?         @map("workstream_id") @db.Uuid
+  workstream   Workstream?     @relation(fields: [workstreamId], references: [id], onDelete: SetNull)
+  name         String
+  description  String?
+  status       LifecycleStatus @default(draft)
+  priority     Priority        @default(medium)
+  visibility   Visibility      @default(internal)
+  tags         String[]        @default([])
+  ownerId      String?         @map("owner_id") @db.Uuid
+  owner        Stakeholder?    @relation("MeetingOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId      String?         @map("phase_id") @db.Uuid
+  phase        Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  meetingDate  DateTime?       @map("meeting_date") @db.Timestamptz(6)
+  agenda       String?
+  summary      String?
+  recordingUrl String?         @map("recording_url")
+  createdBy    String?         @map("created_by") @db.Uuid
+  updatedBy    String?         @map("updated_by") @db.Uuid
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  participants MeetingParticipant[]
+  actionItems  ActionItem[]
+
+  @@index([rolloutId, meetingDate])
+  @@index([workstreamId])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("meetings")
+}
+
+/// Meeting ↔ stakeholder join. Hard-deleted (pure join — nothing to recover).
+model MeetingParticipant {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  meetingId     String      @map("meeting_id") @db.Uuid
+  meeting       Meeting     @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  stakeholderId String      @map("stakeholder_id") @db.Uuid
+  stakeholder   Stakeholder @relation(fields: [stakeholderId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([meetingId, stakeholderId])
+  @@index([stakeholderId])
+  @@map("meeting_participants")
+}
+
+/// Lightweight context (simple markdown).
+model Note {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String          @map("rollout_id") @db.Uuid
+  rollout     Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  status      LifecycleStatus @default(draft)
+  priority    Priority        @default(medium)
+  visibility  Visibility      @default(internal)
+  tags        String[]        @default([])
+  ownerId     String?         @map("owner_id") @db.Uuid
+  owner       Stakeholder?    @relation("NoteOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId     String?         @map("phase_id") @db.Uuid
+  phase       Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  body        String?
+  createdBy   String?         @map("created_by") @db.Uuid
+  updatedBy   String?         @map("updated_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("notes")
+}
+
+/// A communication (daily / weekly / executive).
+model Update {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String          @map("rollout_id") @db.Uuid
+  rollout     Rollout         @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  status      LifecycleStatus @default(draft)
+  priority    Priority        @default(medium)
+  visibility  Visibility      @default(internal)
+  tags        String[]        @default([])
+  ownerId     String?         @map("owner_id") @db.Uuid
+  owner       Stakeholder?    @relation("UpdateOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  phaseId     String?         @map("phase_id") @db.Uuid
+  phase       Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  updateType  UpdateType      @default(weekly) @map("update_type")
+  body        String?
+  createdBy   String?         @map("created_by") @db.Uuid
+  updatedBy   String?         @map("updated_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, updateType])
+  @@index([ownerId])
+  @@index([phaseId])
+  @@index([tags], type: Gin)
+  @@map("updates")
+}
+
+// ---------------------------------------------------------------------------
+// People — a Stakeholder is a rollout participant who may never log in;
+// `profile_id` links the ones who do. Owner/assignee FKs point at
+// stakeholders; created_by/updated_by audit columns point at users.
+// ---------------------------------------------------------------------------
+
+/// Any individual participating in the rollout.
+model Stakeholder {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId  String     @map("rollout_id") @db.Uuid
+  rollout    Rollout    @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name       String
+  email      String?
+  roleTitle  String?    @map("role_title")
+  description String?
+  visibility Visibility @default(internal)
+  tags       String[]   @default([])
+  profileId  String?    @map("profile_id") @db.Uuid
+  profile    Profile?   @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  partnerId  String?    @map("partner_id") @db.Uuid
+  partner    Partner?   @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  createdBy  String?    @map("created_by") @db.Uuid
+  updatedBy  String?    @map("updated_by") @db.Uuid
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt  DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  ownedRollouts        Rollout[]            @relation("RolloutOwner")
+  ownedProgrammes      Programme[]          @relation("ProgrammeOwner")
+  ownedWorkstreams     Workstream[]         @relation("WorkstreamOwner")
+  ownedMilestones      Milestone[]          @relation("MilestoneOwner")
+  assignedTasks        Task[]               @relation("TaskAssignee")
+  ownedRisks           Risk[]               @relation("RiskOwner")
+  ownedIssues          Issue[]              @relation("IssueOwner")
+  ownedDecisions       Decision[]           @relation("DecisionOwner")
+  approvedDecisions    Decision[]           @relation("DecisionApprover")
+  ownedDependencies    Dependency[]         @relation("DependencyOwner")
+  ownedActionItems     ActionItem[]         @relation("ActionItemOwner")
+  ownedDeliverables    Deliverable[]        @relation("DeliverableOwner")
+  ownedDocuments       Document[]           @relation("DocumentOwner")
+  ownedMeetings        Meeting[]            @relation("MeetingOwner")
+  ownedNotes           Note[]               @relation("NoteOwner")
+  ownedUpdates         Update[]             @relation("UpdateOwner")
+  meetingParticipation MeetingParticipant[]
+  teamMemberships      TeamMember[]
+
+  @@index([rolloutId])
+  @@index([profileId])
+  @@index([partnerId])
+  @@index([tags], type: Gin)
+  @@map("stakeholders")
+}
+
+/// A logical group of stakeholders within the rollout.
+model Team {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId   String    @map("rollout_id") @db.Uuid
+  rollout     Rollout   @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  tags        String[]  @default([])
+  createdBy   String?   @map("created_by") @db.Uuid
+  updatedBy   String?   @map("updated_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  members TeamMember[]
+
+  @@index([rolloutId])
+  @@index([tags], type: Gin)
+  @@map("teams")
+}
+
+/// Team ↔ stakeholder join. Hard-deleted (pure join — nothing to recover).
+model TeamMember {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId        String      @map("team_id") @db.Uuid
+  team          Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  stakeholderId String      @map("stakeholder_id") @db.Uuid
+  stakeholder   Stakeholder @relation(fields: [stakeholderId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([teamId, stakeholderId])
+  @@index([stakeholderId])
+  @@map("team_members")
+}
+
+/// An external organization participating in the rollout.
+model Partner {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId    String    @map("rollout_id") @db.Uuid
+  rollout      Rollout   @relation(fields: [rolloutId], references: [id], onDelete: Restrict)
+  name         String
+  description  String?
+  contactName  String?   @map("contact_name")
+  contactEmail String?   @map("contact_email")
+  tags         String[]  @default([])
+  createdBy    String?   @map("created_by") @db.Uuid
+  updatedBy    String?   @map("updated_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  stakeholders Stakeholder[]
+
+  @@index([rolloutId])
+  @@index([tags], type: Gin)
+  @@map("partners")
+}
+
+// ---------------------------------------------------------------------------
+// System surfaces
+// ---------------------------------------------------------------------------
+
+/// Append-only feed powering the Overview activity widget. No updates, no
+/// soft delete. `entity_name` is denormalized so feed entries stay readable
+/// after the entity is deleted.
+model ActivityLog {
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId  String       @map("rollout_id") @db.Uuid
+  rollout    Rollout      @relation(fields: [rolloutId], references: [id], onDelete: Cascade)
+  actorId    String?      @map("actor_id") @db.Uuid
+  actor      Profile?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  verb       ActivityVerb
+  entityType EntityType   @map("entity_type")
+  entityId   String       @map("entity_id") @db.Uuid
+  entityName String       @map("entity_name")
+  detail     Json?
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([rolloutId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("activity_log")
+}
+
+/// In-app notifications (PRD §14). Produced from Release 4 onward.
+model Notification {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rolloutId        String           @map("rollout_id") @db.Uuid
+  rollout          Rollout          @relation(fields: [rolloutId], references: [id], onDelete: Cascade)
+  recipientId      String           @map("recipient_id") @db.Uuid
+  recipient        Profile          @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  notificationType NotificationType @map("notification_type")
+  entityType       EntityType       @map("entity_type")
+  entityId         String           @map("entity_id") @db.Uuid
+  message          String?
+  readAt           DateTime?        @map("read_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([recipientId, readAt])
+  @@index([rolloutId])
+  @@map("notifications")
 }

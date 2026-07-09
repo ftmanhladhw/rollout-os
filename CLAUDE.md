@@ -6,7 +6,7 @@ Project guide for Claude Code sessions in this repo. Read this first.
 
 **Rollout OS** is a greenfield, domain-agnostic product for running **staggered, multi-tenant software rollouts** — standing up a product across many teams, partners, or customers, where each unit advances independently through a defined delivery lifecycle. It generalizes the "one tracker → everything derived" operating model into a reusable platform.
 
-> **Status: architecture + auth infrastructure.** The Next.js app scaffold, tooling, and Supabase auth (email/password + magic link, RLS reference pattern via `profiles`, private storage bucket) are in place. No product features or **domain** models exist yet; `src/app/page.tsx` is still a placeholder (now auth-protected). Do not add feature code unless the task explicitly asks for it. Platform setup runbook: [SETUP.md](./SETUP.md).
+> **Status: architecture + auth + domain schema.** The Next.js app scaffold, Supabase auth (email/password + magic link, private storage bucket), and the full MVP domain schema (27 tables, RLS on all, design record in [docs/09](./docs/09_database_design.md)) are in place. No product features exist yet; `src/app/page.tsx` is still a placeholder (auth-protected). Do not add feature code unless the task explicitly asks for it. Platform setup runbook: [SETUP.md](./SETUP.md).
 
 ## Core product concepts (the reusable model)
 
@@ -27,7 +27,7 @@ The **Amazon CSR** implementation was the **design partner only** — the source
 
 **Next.js 15** (App Router, React 19) · **TypeScript** (strict) · **Tailwind CSS v4** + **shadcn/ui** + **lucide-react** · **TanStack Query** + **TanStack Table** · **React Hook Form** + **Zod** · **Prisma** + **Supabase** (Postgres + Auth) · **Vercel**. Quality: ESLint (`eslint-config-next`) · Prettier · Husky · lint-staged · commitlint · GitHub Actions CI. Node `>= 22` (see `.nvmrc`). Full detail in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-**Status: auth infrastructure wired; no product features or domain models yet.** `prisma/schema.prisma` has only the `Profile` auth-companion model.
+**Status: auth + domain schema wired; no product features yet.** `prisma/schema.prisma` holds the full MVP domain model — cross-cutting conventions (soft delete, `rollout_id` denormalization, profiles-vs-stakeholders, polymorphic refs) are documented in [docs/09](./docs/09_database_design.md).
 
 | Script                 | Purpose                              |
 | ---------------------- | ------------------------------------ |
