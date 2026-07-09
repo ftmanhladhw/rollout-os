@@ -2,7 +2,7 @@
 
 This document describes the **code architecture** of Rollout OS. For the _product_ architecture (domain model, operational models), see [`docs/04_architecture_specification.md`](./docs/04_architecture_specification.md).
 
-> **Status:** architecture only — no features or domain models are built yet.
+> **Status:** architecture + auth infrastructure — Supabase auth (email/password, magic link), RLS reference pattern, and storage helpers are wired; no domain models or product features yet. Platform setup runbook: [`SETUP.md`](./SETUP.md).
 
 ## Technology stack
 
@@ -26,12 +26,14 @@ This document describes the **code architecture** of Rollout OS. For the _produc
 rollout-os/
 ├── src/
 │   ├── app/                    # App Router: routes, layouts, pages
+│   │   ├── (auth)/             # login & signup pages, auth server actions, schemas
+│   │   ├── auth/confirm/       # email OTP verification route (signup + magic link)
 │   │   ├── layout.tsx          # root layout (fonts, metadata, providers)
-│   │   ├── page.tsx            # placeholder landing page
+│   │   ├── page.tsx            # placeholder landing page (auth-protected)
 │   │   ├── providers.tsx       # client-side providers (TanStack Query, …)
 │   │   └── globals.css         # Tailwind v4 + design tokens
 │   ├── components/
-│   │   └── ui/                 # shadcn/ui primitives
+│   │   └── ui/                 # shadcn/ui primitives (button, input, label, card)
 │   ├── config/                 # static app configuration (site.ts)
 │   ├── hooks/                  # shared React hooks
 │   ├── lib/                    # framework-agnostic building blocks
@@ -39,11 +41,14 @@ rollout-os/
 │   │   ├── env.ts              # Zod-validated environment variables
 │   │   ├── utils.ts            # cn() and shared helpers
 │   │   ├── query/              # TanStack Query client factory
-│   │   └── supabase/           # Supabase browser/server/middleware clients
+│   │   └── supabase/           # Supabase clients + storage helpers
 │   ├── types/                  # shared TypeScript types
-│   └── middleware.ts           # refreshes the Supabase auth session
+│   └── middleware.ts           # session refresh + default-deny route protection
 ├── prisma/
-│   └── schema.prisma           # datasource + generator (no models yet)
+│   ├── schema.prisma           # datasource + Profile (auth infra; no domain models)
+│   └── migrations/             # SQL migrations incl. RLS policies
+├── supabase/
+│   └── setup.sql               # idempotent platform config (auth trigger, storage)
 ├── components.json             # shadcn/ui configuration
 ├── next.config.ts
 ├── postcss.config.mjs          # Tailwind v4 via @tailwindcss/postcss
@@ -55,7 +60,8 @@ rollout-os/
 
 - **Server Components by default.** Add `'use client'` only where interactivity or browser APIs are required.
 - **`src/lib` is where non-UI logic lives** — data clients, validation, and utilities. Keep it free of React where possible.
-- **Data access:** Prisma is the source of truth for schema and typed queries; Supabase provides Auth (and optionally storage/realtime). Both target the same Postgres database.
+- **Data access:** Prisma is the source of truth for schema and typed queries; Supabase provides Auth and Storage. Both target the same Postgres database. Prisma migrations own the `public` schema (tables, RLS policies); Supabase-managed schemas (`auth`, `storage`) are configured by the idempotent `supabase/setup.sql` — one source of truth per config item.
+- **Row Level Security** is enabled on every app table; `profiles` is the reference pattern (own-row policies via `auth.uid()`). Prisma connects as `postgres` and bypasses RLS, so server-side authorization stays explicit in application code; the policies protect the PostgREST/client roles.
 - **Environment variables** are validated once in `src/lib/env.ts`. Add new variables to the Zod schema and to `.env.example`.
 - **Feature code is organized by route** under `src/app`, with shared pieces promoted to `src/components`, `src/hooks`, and `src/lib`.
 
@@ -71,3 +77,5 @@ npm install             # installs deps + generates the Prisma client
 cp .env.example .env    # then fill in Supabase/database values
 npm run dev             # http://localhost:3000
 ```
+
+Creating the Supabase project itself (auth settings, email templates, migrations, storage) is covered step-by-step in [`SETUP.md`](./SETUP.md).

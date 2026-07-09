@@ -4,7 +4,7 @@
 // `DATABASE_URL` is the pooled connection used by the app at runtime.
 // `DIRECT_URL` is the direct connection used for migrations.
 //
-// No domain models are defined yet — this is architecture only. Models
+// No domain models are defined yet — only auth infrastructure. Domain models
 // (Organization, Rollout, Programme, Workstream, Milestone, Task, …) will be
 // added here in a later phase, following the Architecture Specification.
 
@@ -16,4 +16,18 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+}
+
+/// Auth infrastructure (not a domain model): 1:1 companion to `auth.users`,
+/// auto-created by the `on_auth_user_created` trigger (see supabase/setup.sql).
+/// Its migration adds an FK to auth.users and RLS policies (own-row access) —
+/// the reference pattern every future domain table copies.
+model Profile {
+  id          String   @id @db.Uuid
+  email       String   @unique
+  displayName String?  @map("display_name")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("profiles")
 }
