@@ -6,7 +6,7 @@ Project guide for Claude Code sessions in this repo. Read this first.
 
 **Rollout OS** is a greenfield, domain-agnostic product for running **staggered, multi-tenant software rollouts** — standing up a product across many teams, partners, or customers, where each unit advances independently through a defined delivery lifecycle. It generalizes the "one tracker → everything derived" operating model into a reusable platform.
 
-> **Status: application architecture only.** The Next.js app scaffold, tooling, and folder structure are in place, but no product features or domain models exist yet. `src/app/page.tsx` is a placeholder and `prisma/schema.prisma` has no models. Do not add feature code unless the task explicitly asks for it.
+> **Status: architecture + auth infrastructure.** The Next.js app scaffold, tooling, and Supabase auth (email/password + magic link, RLS reference pattern via `profiles`, private storage bucket) are in place. No product features or **domain** models exist yet; `src/app/page.tsx` is still a placeholder (now auth-protected). Do not add feature code unless the task explicitly asks for it. Platform setup runbook: [SETUP.md](./SETUP.md).
 
 ## Core product concepts (the reusable model)
 
@@ -27,7 +27,7 @@ The **Amazon CSR** implementation was the **design partner only** — the source
 
 **Next.js 15** (App Router, React 19) · **TypeScript** (strict) · **Tailwind CSS v4** + **shadcn/ui** + **lucide-react** · **TanStack Query** + **TanStack Table** · **React Hook Form** + **Zod** · **Prisma** + **Supabase** (Postgres + Auth) · **Vercel**. Quality: ESLint (`eslint-config-next`) · Prettier · Husky · lint-staged · commitlint · GitHub Actions CI. Node `>= 22` (see `.nvmrc`). Full detail in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-**Status: architecture only — no features or domain models yet.** `src/app/page.tsx` is a placeholder; `prisma/schema.prisma` has no models.
+**Status: auth infrastructure wired; no product features or domain models yet.** `prisma/schema.prisma` has only the `Profile` auth-companion model.
 
 | Script                 | Purpose                              |
 | ---------------------- | ------------------------------------ |
@@ -38,6 +38,7 @@ The **Amazon CSR** implementation was the **design partner only** — the source
 | `npm run format`       | Prettier write                       |
 | `npm run format:check` | Prettier check (CI)                  |
 | `npm run db:*`         | Prisma: generate/push/migrate/studio |
+| `db:migrate:deploy`    | Apply migrations (prod/CI)           |
 
 ### Where things live (see ARCHITECTURE.md)
 
