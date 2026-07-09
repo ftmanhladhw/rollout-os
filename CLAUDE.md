@@ -25,7 +25,7 @@ The **Amazon CSR** implementation was the **design partner only** — the source
 
 ## Tech stack
 
-**Next.js 15** (App Router, React 19) · **TypeScript** (strict) · **Tailwind CSS v4** + **shadcn/ui** + **lucide-react** · **TanStack Query** + **TanStack Table** · **React Hook Form** + **Zod** · **Prisma** + **Supabase** (Postgres + Auth) · **Vercel**. Quality: ESLint (`eslint-config-next`) · Prettier · Husky · lint-staged · commitlint · GitHub Actions CI. Node `>= 20` (see `.nvmrc`). Full detail in [ARCHITECTURE.md](./ARCHITECTURE.md).
+**Next.js 15** (App Router, React 19) · **TypeScript** (strict) · **Tailwind CSS v4** + **shadcn/ui** + **lucide-react** · **TanStack Query** + **TanStack Table** · **React Hook Form** + **Zod** · **Prisma** + **Supabase** (Postgres + Auth) · **Vercel**. Quality: ESLint (`eslint-config-next`) · Prettier · Husky · lint-staged · commitlint · GitHub Actions CI. Node `>= 22` (see `.nvmrc`). Full detail in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 **Status: architecture only — no features or domain models yet.** `src/app/page.tsx` is a placeholder; `prisma/schema.prisma` has no models.
 

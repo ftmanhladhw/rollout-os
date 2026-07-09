@@ -66,7 +66,7 @@ Formatting (Prettier + Tailwind class sorting), linting (ESLint flat config with
 ## Local development
 
 ```bash
-nvm use                 # Node 20 (see .nvmrc)
+nvm use                 # Node 22 (see .nvmrc)
 npm install             # installs deps + generates the Prisma client
 cp .env.example .env    # then fill in Supabase/database values
 npm run dev             # http://localhost:3000

@@ -27,12 +27,12 @@ Core ideas the product is built around:
 | ORM / DB / Auth | Prisma · Supabase (Postgres + Auth)                                                           |
 | Hosting         | Vercel                                                                                        |
 | Quality         | ESLint (eslint-config-next) · Prettier · Husky · lint-staged · commitlint · GitHub Actions CI |
-| Node            | >= 20 (see `.nvmrc`)                                                                          |
+| Node            | >= 22 (see `.nvmrc`)                                                                          |
 
 ## Getting started
 
 ```bash
-nvm use                 # Node 20 (see .nvmrc)
+nvm use                 # Node 22 (see .nvmrc)
 npm install             # installs deps + generates the Prisma client
 cp .env.example .env    # then fill in Supabase / database values
 npm run dev             # http://localhost:3000
