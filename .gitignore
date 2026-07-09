@@ -9,6 +9,17 @@ build/
 out/
 *.tsbuildinfo
 
+# Next.js
+.next/
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# Prisma (generated client, if emitted into the repo)
+# (default client lives in node_modules; uncomment if you output to src)
+# src/generated/
+
 # Test / coverage
 coverage/
 .nyc_output/

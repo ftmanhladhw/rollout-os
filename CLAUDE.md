@@ -6,7 +6,7 @@ Project guide for Claude Code sessions in this repo. Read this first.
 
 **Rollout OS** is a greenfield, domain-agnostic product for running **staggered, multi-tenant software rollouts** — standing up a product across many teams, partners, or customers, where each unit advances independently through a defined delivery lifecycle. It generalizes the "one tracker → everything derived" operating model into a reusable platform.
 
-> **Status: foundation only. No application code has been written yet.** `src/index.ts` is a deliberate `export {}` placeholder that keeps the build green until real modules land. Do not add feature code unless the task explicitly asks for it.
+> **Status: application architecture only.** The Next.js app scaffold, tooling, and folder structure are in place, but no product features or domain models exist yet. `src/app/page.tsx` is a placeholder and `prisma/schema.prisma` has no models. Do not add feature code unless the task explicitly asks for it.
 
 ## Core product concepts (the reusable model)
 
@@ -23,18 +23,25 @@ These are the pillars the product is built around. They are domain-agnostic by d
 
 The **Amazon CSR** implementation was the **design partner only** — the source we reverse-engineered the reusable rollout model from. **Never hardcode** Amazon / CSR / mGrant / mForm / specific programmes / partners / dates into the product. Anything domain-specific is **config or seed data**, not schema or code.
 
-## Tech foundation
+## Tech stack
 
-TypeScript (ESM, strict) · ESLint 9 flat config + `typescript-eslint` · Prettier · Husky · lint-staged · commitlint (Conventional Commits) · GitHub Actions CI. Node `>= 20` (see `.nvmrc`).
+**Next.js 15** (App Router, React 19) · **TypeScript** (strict) · **Tailwind CSS v4** + **shadcn/ui** + **lucide-react** · **TanStack Query** + **TanStack Table** · **React Hook Form** + **Zod** · **Prisma** + **Supabase** (Postgres + Auth) · **Vercel**. Quality: ESLint (`eslint-config-next`) · Prettier · Husky · lint-staged · commitlint · GitHub Actions CI. Node `>= 22` (see `.nvmrc`). Full detail in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-| Script                 | Purpose                     |
-| ---------------------- | --------------------------- |
-| `npm run build`        | Compile TypeScript (`tsc`)  |
-| `npm run typecheck`    | Type-check without emitting |
-| `npm run lint`         | ESLint                      |
-| `npm run lint:fix`     | ESLint with autofix         |
-| `npm run format`       | Prettier write              |
-| `npm run format:check` | Prettier check (CI)         |
+**Status: architecture only — no features or domain models yet.** `src/app/page.tsx` is a placeholder; `prisma/schema.prisma` has no models.
+
+| Script                 | Purpose                              |
+| ---------------------- | ------------------------------------ |
+| `npm run dev`          | Next.js dev server                   |
+| `npm run build`        | Production build (`next build`)      |
+| `npm run typecheck`    | Type-check with `tsc`                |
+| `npm run lint`         | ESLint                               |
+| `npm run format`       | Prettier write                       |
+| `npm run format:check` | Prettier check (CI)                  |
+| `npm run db:*`         | Prisma: generate/push/migrate/studio |
+
+### Where things live (see ARCHITECTURE.md)
+
+`src/app` routes & layouts · `src/components/ui` shadcn primitives · `src/lib` non-UI logic (`db.ts` Prisma, `env.ts` Zod env, `supabase/` clients, `query/` TanStack) · `src/config` app config · `src/middleware.ts` Supabase session refresh · `prisma/schema.prisma` datasource (no models yet).
 
 ## Workflow & conventions (enforced)
 
@@ -47,5 +54,6 @@ TypeScript (ESM, strict) · ESLint 9 flat config + `typescript-eslint` · Pretti
 ## Environment notes
 
 - A global safety-guard hook blocks literal `git push …main/master` and force-pushes — always work on a feature branch and merge via PR.
-- `dist/` is git-ignored build output; `package-lock.json` is committed.
+- `.next/` and `next-env.d.ts` are git-ignored; `package-lock.json` is committed.
+- Environment variables are validated in `src/lib/env.ts` and documented in `.env.example`; never commit real secrets. CI builds with `SKIP_ENV_VALIDATION=true`.
 - Repo: https://github.com/ftmanhladhw/rollout-os (private).

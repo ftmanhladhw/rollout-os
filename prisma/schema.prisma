@@ -1,0 +1,19 @@
+// Prisma schema for Rollout OS.
+//
+// Prisma is the ORM and migration tool; the database is Supabase Postgres.
+// `DATABASE_URL` is the pooled connection used by the app at runtime.
+// `DIRECT_URL` is the direct connection used for migrations.
+//
+// No domain models are defined yet — this is architecture only. Models
+// (Organization, Rollout, Programme, Workstream, Milestone, Task, …) will be
+// added here in a later phase, following the Architecture Specification.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
