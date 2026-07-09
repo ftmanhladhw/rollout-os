@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
-import { loginSchema, magicLinkSchema, signupSchema } from './schemas';
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  magicLinkSchema,
+  resetPasswordSchema,
+  signupSchema,
+} from './schemas';
 
 /**
  * Auth server actions. Each action re-validates its input with Zod (the client
@@ -75,6 +81,41 @@ export async function sendMagicLink(input: unknown): Promise<ActionResult> {
   }
 
   return { success: 'Check your email for a sign-in link.' };
+}
+
+export async function sendPasswordReset(input: unknown): Promise<ActionResult> {
+  const parsed = forgotPasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: 'Enter a valid email address.' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/reset-password`,
+  });
+  // Supabase does not reveal whether the account exists (by design, and we
+  // must not either); only operational errors (e.g. rate limits) surface.
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { success: 'If an account exists for that email, a reset link is on its way.' };
+}
+
+export async function resetPassword(input: unknown): Promise<ActionResult> {
+  const parsed = resetPasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: 'Password must be at least 8 characters.' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath('/', 'layout');
+  redirect('/');
 }
 
 export async function signOut(): Promise<void> {

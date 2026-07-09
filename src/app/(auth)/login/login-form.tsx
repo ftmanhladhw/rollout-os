@@ -129,6 +129,10 @@ export function LoginForm({ initialError }: { initialError?: string }) {
           <Link href="/signup" className="text-primary underline-offset-4 hover:underline">
             Sign up
           </Link>
+          {' · '}
+          <Link href="/forgot-password" className="text-primary underline-offset-4 hover:underline">
+            Forgot password?
+          </Link>
         </p>
       </CardFooter>
     </Card>

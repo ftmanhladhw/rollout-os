@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 type CookiesToSet = { name: string; value: string; options: CookieOptions }[];
 
 /** Routes reachable without a session. Everything else requires auth. */
-const PUBLIC_PATHS = ['/login', '/signup'];
+const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password'];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.includes(pathname) || pathname.startsWith('/auth');
