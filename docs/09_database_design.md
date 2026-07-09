@@ -51,7 +51,7 @@ A **profile** is an authentication identity. A **stakeholder** is a rollout part
 
 ### 7. Enums vs rows
 
-The terminology layer relabels **display labels**, never stored values. Stable value-sets are Postgres enums (`lifecycle_status`, `priority`, `health`, `readiness_status`, `visibility`, `org_role`, `experience_profile`, `risk_level`, `document_type`, `update_type`, `dependency_type`, `entity_type`, `activity_verb`, `notification_type`). **Configurable sets are rows**: `phases` (8 doc-04 defaults seeded per rollout) and `readiness_dimensions` (7 defaults seeded per rollout) — configuration, not schema, per the design-partner hard rule.
+The terminology layer relabels **display labels**, never stored values. Stable value-sets are Postgres enums (`lifecycle_status`, `priority`, `health`, `readiness_status`, `visibility`, `member_role` (see [doc 14](./14_auth_authorization.md)), `experience_profile`, `risk_level`, `document_type`, `update_type`, `dependency_type`, `entity_type`, `activity_verb`, `notification_type`). **Configurable sets are rows**: `phases` (8 doc-04 defaults seeded per rollout) and `readiness_dimensions` (7 defaults seeded per rollout) — configuration, not schema, per the design-partner hard rule.
 
 ### 8. Polymorphic references — `entity_type` enum + uuid, no FK
 

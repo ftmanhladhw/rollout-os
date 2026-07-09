@@ -38,6 +38,14 @@ The app verifies email links via the `token_hash` flow (`/auth/confirm`), so the
 <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink">Sign in</a>
 ```
 
+**Reset Password** — replace the link with:
+
+```html
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password"
+  >Reset your password</a
+>
+```
+
 > Without this change, auth emails point at Supabase's `/verify` endpoint instead of the app's confirm route, and sign-in links will not establish a session in the app.
 
 ## 4. Fill in `.env`
