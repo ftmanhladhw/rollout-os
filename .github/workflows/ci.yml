@@ -40,8 +40,14 @@ jobs:
       - name: ESLint
         run: npm run lint
 
-      - name: TypeScript build
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build
         run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          SKIP_ENV_VALIDATION: 'true'
 
   commitlint:
     name: Commit messages (Conventional Commits)
