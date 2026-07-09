@@ -8,11 +8,13 @@ Rollout OS — a generalized **rollout & delivery command center** (plan, track,
 
 ## Current status (as of this handoff)
 
-**Application architecture only — no product features or domain models yet.**
+**Architecture + auth + domain schema — no product features yet.**
 
 - ✅ Next.js 15 app architecture in place and building (`main` is green-verified).
-- ✅ Product docs **01–07 populated**; **08–13 are placeholders**.
-- ⬜ No features, no Prisma models, no shadcn components added yet.
+- ✅ Supabase auth wired end-to-end (email/password + magic link, default-deny middleware, private storage bucket). Platform runbook: [`SETUP.md`](./SETUP.md) — **the Supabase project itself is not created yet**.
+- ✅ Full MVP domain schema: 27 tables with RLS, in `prisma/schema.prisma` + migrations. Design record: [`docs/09`](./docs/09_database_design.md).
+- ✅ Product docs **01–07 and 09 populated**; **08 and 10–13 are placeholders**.
+- ⬜ No feature code; migrations not yet applied to a live database.
 
 ## Where the context lives
 
@@ -50,7 +52,8 @@ npm run dev             # http://localhost:3000
 
 ## Likely next steps
 
-1. **Doc 08 — Design System** (grid, spacing, type, components, states) — the UX spec (doc 07) explicitly tees this up as the next artifact.
-2. Then the **Prisma domain models** from the Architecture Specification (Organization → Rollout → Programme → Workstream → Milestone → Task, plus RAID/knowledge/people), and the first shadcn/ui components.
+1. **Create the Supabase project** (SETUP.md steps 1–6) and apply migrations — unblocks live auth verification and everything downstream.
+2. **Doc 08 — Design System** (grid, spacing, type, components, states) — the UX spec (doc 07) explicitly tees this up.
+3. **Release 1 feature code** (PRD §18): Organization · Rollout · Programmes · Workstreams CRUD on the now-existing schema.
 
 Nothing is stranded in any past chat — this repo is the single source of truth.

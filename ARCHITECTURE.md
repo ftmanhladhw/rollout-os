@@ -2,7 +2,7 @@
 
 This document describes the **code architecture** of Rollout OS. For the _product_ architecture (domain model, operational models), see [`docs/04_architecture_specification.md`](./docs/04_architecture_specification.md).
 
-> **Status:** architecture + auth infrastructure — Supabase auth (email/password, magic link), RLS reference pattern, and storage helpers are wired; no domain models or product features yet. Platform setup runbook: [`SETUP.md`](./SETUP.md).
+> **Status:** architecture + auth + domain schema — Supabase auth (email/password, magic link), storage helpers, and the full MVP domain schema (27 tables with RLS) are in place; no product features yet. Schema design record: [`docs/09_database_design.md`](./docs/09_database_design.md). Platform setup runbook: [`SETUP.md`](./SETUP.md).
 
 ## Technology stack
 
@@ -45,7 +45,7 @@ rollout-os/
 │   ├── types/                  # shared TypeScript types
 │   └── middleware.ts           # session refresh + default-deny route protection
 ├── prisma/
-│   ├── schema.prisma           # datasource + Profile (auth infra; no domain models)
+│   ├── schema.prisma           # full MVP domain schema (see docs/09)
 │   └── migrations/             # SQL migrations incl. RLS policies
 ├── supabase/
 │   └── setup.sql               # idempotent platform config (auth trigger, storage)
