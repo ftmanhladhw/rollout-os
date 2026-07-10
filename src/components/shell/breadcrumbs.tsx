@@ -8,8 +8,11 @@ import { navTitles } from '@/config/nav';
 
 type Crumb = { href: string; label: string };
 
-/** Fallback for path segments the nav config doesn't know (future detail pages). */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Fallback for path segments the nav config doesn't know (detail pages). */
 function humanize(segment: string) {
+  if (UUID_PATTERN.test(segment)) return 'Details';
   return segment.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
