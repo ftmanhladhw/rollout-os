@@ -62,6 +62,13 @@ Decisions on record:
 
 `getAuthzContext(organizationId)` resolves `{userId, isSuperAdmin, role}` per request (React-cached). `can(ctx, action)` answers; `assertCan(ctx, action)` throws — used at the top of every mutating server action. A denied mutation throws rather than returning: it is a bug or an attack, not a user flow.
 
+**The denied path has two surfaces**, matching the two kinds of denial:
+
+- **Denied view → `/unauthorized`.** `requireCan(ctx, action)` guards a page/layout render and redirects to the `/unauthorized` page (inside the app shell) when the role can't view the resource. A denied view _is_ a user flow — someone opened a link their role can't see.
+- **Denied mutation → error boundary.** `assertCan` throws a typed `ForbiddenError`; it surfaces at the nearest `error.tsx` (`src/app/(app)/error.tsx`). Production strips server error messages from the client (digest only), so the boundary copy is generic by design — server logs carry the real error.
+
+Signed-out users hit neither: default-deny middleware redirects them to `/login` before any page code runs.
+
 ### Experience Profiles (Layer 3)
 
 `organization_members.experience_profile` (5 values, doc 04): `executive · programme_manager · engineering · consultant · client`. Initialized from the role via `DEFAULT_EXPERIENCE_PROFILE`, independently changeable. Controls landing page, navigation, visible modules, widgets, default filters — to be consumed by `src/config/experience-profiles.ts` when UI modules exist. **Never consulted in a permission check.**
