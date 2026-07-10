@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { LifecycleStatusBadge } from '@/components/lifecycle-status-badge';
@@ -6,6 +7,7 @@ import { PRIORITY_LABELS } from '@/config/terminology';
 import { can } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getRolloutContext } from '@/lib/rollout';
+import { NewWorkstreamSheet } from '../../workstreams/new-workstream-sheet';
 import { ProgrammeEditor } from './programme-editor';
 
 export const metadata: Metadata = { title: 'Programme' };
@@ -39,10 +41,18 @@ export default async function ProgrammePage({ params }: { params: Promise<{ id: 
       status: true,
       priority: true,
       updatedAt: true,
-      _count: { select: { workstreams: { where: { deletedAt: null } } } },
+      workstreams: {
+        where: {
+          deletedAt: null,
+          ...(seesInternal ? {} : { visibility: 'client' as const }),
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, status: true, progress: true },
+      },
     },
   });
   if (!programme) notFound();
+  const workstreamCount = programme.workstreams.length;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -52,8 +62,8 @@ export default async function ProgrammePage({ params }: { params: Promise<{ id: 
           <LifecycleStatusBadge status={programme.status} />
         </div>
         <p className="text-muted-foreground text-sm">
-          {PRIORITY_LABELS[programme.priority]} priority · {programme._count.workstreams}{' '}
-          {programme._count.workstreams === 1 ? 'workstream' : 'workstreams'} · Updated{' '}
+          {PRIORITY_LABELS[programme.priority]} priority · {workstreamCount}{' '}
+          {workstreamCount === 1 ? 'workstream' : 'workstreams'} · Updated{' '}
           {programme.updatedAt.toLocaleDateString('en-GB', {
             day: 'numeric',
             month: 'short',
@@ -81,13 +91,45 @@ export default async function ProgrammePage({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      <section className="rounded-lg border border-dashed px-4 py-6 text-center">
-        <p className="text-sm font-medium">Workstreams</p>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {programme._count.workstreams === 0
-            ? 'None yet — the Workstreams module is next; workstreams created there attach to this programme.'
-            : `${programme._count.workstreams} attached — the Workstreams module lands next.`}
-        </p>
+      <section className="bg-card rounded-lg border">
+        <header className="flex h-11 items-center gap-2 border-b px-4">
+          <h2 className="text-sm font-medium">Workstreams</h2>
+          <span className="text-muted-foreground text-xs tabular-nums">{workstreamCount}</span>
+          {canManage && (
+            <span className="ml-auto">
+              <NewWorkstreamSheet
+                programmes={[{ id: programme.id, name: programme.name }]}
+                defaultProgrammeId={programme.id}
+              />
+            </span>
+          )}
+        </header>
+        {workstreamCount === 0 ? (
+          <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+            No workstreams yet — every workstream belongs to one programme; add the first
+            team&apos;s slice here.
+          </p>
+        ) : (
+          <ul className="divide-y">
+            {programme.workstreams.map((workstream) => (
+              <li
+                key={workstream.id}
+                className="hover:bg-accent/40 flex items-center gap-3 px-4 py-2.5 transition-colors"
+              >
+                <Link
+                  href={`/workstreams/${workstream.id}`}
+                  className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
+                >
+                  {workstream.name}
+                </Link>
+                <LifecycleStatusBadge status={workstream.status} />
+                <span className="text-muted-foreground w-10 shrink-0 text-right text-xs tabular-nums">
+                  {workstream.progress}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );
