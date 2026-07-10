@@ -41,6 +41,7 @@ export function EntityDrawer({
   defaults = {},
   action,
   archiveAction,
+  archiveLabel = 'Archive',
   submitLabel,
   trigger,
 }: {
@@ -50,6 +51,8 @@ export function EntityDrawer({
   defaults?: Record<string, string>;
   action: (input: unknown) => Promise<ActionResult>;
   archiveAction?: (input: unknown) => Promise<ActionResult>;
+  /** Destructive-button wording; member removal says "Remove", not "Archive". */
+  archiveLabel?: string;
   submitLabel: string;
   trigger: ReactNode;
 }) {
@@ -154,7 +157,7 @@ export function EntityDrawer({
                     disabled={isPending}
                     onClick={archive}
                   >
-                    Confirm archive
+                    Confirm {archiveLabel.toLowerCase()}
                   </Button>
                   <Button
                     type="button"
@@ -174,7 +177,7 @@ export function EntityDrawer({
                   className="text-destructive hover:text-destructive ml-auto"
                   onClick={() => setConfirmingArchive(true)}
                 >
-                  Archive
+                  {archiveLabel}
                 </Button>
               ))}
           </div>

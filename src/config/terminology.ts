@@ -1,7 +1,9 @@
 import type {
   DocumentType,
+  ExperienceProfile,
   Health,
   LifecycleStatus,
+  MemberRole,
   Priority,
   ReadinessStatus,
   RiskLevel,
@@ -67,6 +69,24 @@ export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
+};
+
+export const MEMBER_ROLE_LABELS: Record<MemberRole, string> = {
+  org_admin: 'Organization admin',
+  consultant: 'Consultant',
+  product_manager: 'Product manager',
+  programme_manager: 'Programme manager',
+  engineering: 'Engineering',
+  executive: 'Executive',
+  client: 'Client',
+};
+
+export const EXPERIENCE_PROFILE_LABELS: Record<ExperienceProfile, string> = {
+  executive: 'Executive',
+  programme_manager: 'Programme manager',
+  engineering: 'Engineering',
+  consultant: 'Consultant',
+  client: 'Client',
 };
 
 /**
