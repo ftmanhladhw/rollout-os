@@ -48,6 +48,18 @@ Reads (list `/programs`, detail `/programs/[id]`) are server-component
 queries: scoped to the caller's rollout, `deletedAt: null`, client-visibility
 filtered; a foreign, archived, or invalid id is a 404 — never a leak.
 
+## Workstreams (`src/app/(app)/workstreams/actions.ts`)
+
+| Action                                                                     | Guard              | Effect                                                                                                                                             |
+| -------------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createWorkstream({ programmeId, name, description? })`                    | `structure:manage` | Validates the programme is a live row in the caller's rollout (Domain Rule 2), denormalizes `rolloutId` from it (docs/09 §2) → `/workstreams/[id]` |
+| `updateWorkstream({ id, name, description?, status, priority, progress })` | `structure:manage` | Rollout-scoped update; `progress` is the manual 0–100 integer (no automatic roll-up in the MVP) → `{ success }`                                    |
+| `archiveWorkstream({ id })`                                                | `structure:manage` | Rollout-scoped soft delete → `/workstreams`                                                                                                        |
+
+Reads follow the same rules as programmes. The programme detail page embeds
+its live workstreams (same visibility filtering) with a quick-create that
+preselects the parent programme.
+
 ## Testing
 
 `npm test` (Vitest, in CI): the permission matrix is pinned as an executable
