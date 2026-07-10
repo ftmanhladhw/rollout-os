@@ -17,7 +17,8 @@ Rollout OS — a generalized **rollout & delivery command center** (plan, track,
 - ✅ **Authorization model**: 7 org-scoped roles (`member_role`) + super-admin flag; static permission matrix with `can()`/`assertCan()` in `src/lib/authz/`; experience profiles kept separate from RBAC. Denied-path surfaces: `requireCan()` → `/unauthorized` page for denied views, typed `ForbiddenError` → `(app)/error.tsx` boundary for denied mutations. Design record: [`docs/14`](./docs/14_auth_authorization.md).
 - ✅ Product docs **01–07, 09, and 14 populated**; **08 and 10–13 are placeholders**.
 - ✅ **Application shell** (`src/app/(app)` + `src/components/shell/`): responsive sidebar (mobile nav sheet), header with breadcrumbs, global-search placeholder (⌘K palette comes later), user menu (settings entry, theme light/dark/system via next-themes, sign-out), and placeholder pages for the seven lifecycle destinations + settings. Verified end-to-end in the real app (see `.claude/skills/verify/SKILL.md`).
-- ⬜ No feature code yet — all shell pages are empty-state placeholders.
+- ✅ **Onboarding** (`src/app/onboarding/` + gate in the `(app)` layout): first login → create organization (founder becomes `org_admin` atomically) → create first rollout (seeds the 8 doc-04 phases + 7 readiness dimensions from `src/config/rollout-defaults.ts`) → Command Center. Both steps idempotent; org creation is the one deliberately unguarded mutation (matrix is org-scoped, no org exists yet — recorded in docs/14).
+- ⬜ No further feature code — shell pages beyond onboarding are empty-state placeholders; Programmes/Workstreams CRUD not started.
 - ⚠️ **Supabase built-in SMTP did not deliver** during verification (auth links were verified via admin `generateLink` instead). Configure custom SMTP before any real users need auth emails. Also confirm the dashboard email templates match SETUP.md §3 (incl. the Reset Password template).
 
 ## Where the context lives
@@ -58,7 +59,7 @@ npm run dev             # http://localhost:3000
 ## Likely next steps
 
 1. **Doc 08 — Design System** (grid, spacing, type, components, states) — the UX spec (doc 07) explicitly tees this up; the shell currently leans on shadcn defaults.
-2. **Release 1 feature code** (PRD §18): Organization · Rollout · Programmes · Workstreams CRUD — includes the soft-delete Prisma extension, per-rollout seeding of phases/readiness dimensions (docs/09 conventions), and `assertCan()` at the top of every server action (docs/14).
+2. **Release 1 feature code** (PRD §18): Organization and Rollout _creation_ shipped with onboarding (incl. per-rollout seeding). Remaining: Programmes · Workstreams CRUD, editing/archiving for orgs and rollouts, the soft-delete Prisma extension (docs/09), and `assertCan()`/`requireCan()` guards as each surface lands (docs/14).
 3. **Custom SMTP** for auth emails (built-in sender unreliable) and **Vercel deployment** (SETUP.md §8) once Release 1 has something to show.
 
 Nothing is stranded in any past chat — this repo is the single source of truth.
