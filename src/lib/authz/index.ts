@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import { redirect } from 'next/navigation';
 import type { MemberRole } from '@prisma/client';
 import { db } from '@/lib/db';
 import { createClient } from '@/lib/supabase/server';
@@ -60,12 +61,31 @@ export function can(ctx: AuthzContext | null, action: Action): boolean {
   return roleCan(ctx.role, action);
 }
 
+/** Thrown by assertCan. Carries no user data — safe to log verbatim. */
+export class ForbiddenError extends Error {
+  constructor(action: Action) {
+    super(`Forbidden: requires ${action}`);
+    this.name = 'ForbiddenError';
+  }
+}
+
 /**
  * Assert a permission at the top of a server action. Throwing (not returning)
  * is deliberate: a denied mutation is a bug or an attack, not a user flow.
  */
 export function assertCan(ctx: AuthzContext | null, action: Action): asserts ctx is AuthzContext {
   if (!can(ctx, action)) {
-    throw new Error(`Forbidden: requires ${action}`);
+    throw new ForbiddenError(action);
+  }
+}
+
+/**
+ * Guard a page or layout render. Unlike a denied mutation, a denied *view* is
+ * an expected user flow (someone shared a link the viewer's role can't see),
+ * so it lands on /unauthorized instead of an error boundary.
+ */
+export function requireCan(ctx: AuthzContext | null, action: Action): asserts ctx is AuthzContext {
+  if (!can(ctx, action)) {
+    redirect('/unauthorized');
   }
 }
