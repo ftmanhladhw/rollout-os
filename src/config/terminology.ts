@@ -1,4 +1,4 @@
-import type { LifecycleStatus, Priority } from '@prisma/client';
+import type { DocumentType, LifecycleStatus, Priority, UpdateType } from '@prisma/client';
 
 /**
  * Display labels for stored enum values. This is the seed of the terminology
@@ -21,6 +21,26 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
   medium: 'Medium',
   high: 'High',
   critical: 'Critical',
+};
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  prd: 'PRD',
+  architecture: 'Architecture',
+  design: 'Design',
+  meeting_notes: 'Meeting notes',
+  kt: 'Knowledge transfer',
+  recording: 'Recording',
+  presentation: 'Presentation',
+  spreadsheet: 'Spreadsheet',
+  release_notes: 'Release notes',
+  contract: 'Contract',
+  other: 'Other',
+};
+
+export const UPDATE_TYPE_LABELS: Record<UpdateType, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  executive: 'Executive',
 };
 
 /**

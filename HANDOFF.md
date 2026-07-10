@@ -22,7 +22,8 @@ Rollout OS — a generalized **rollout & delivery command center** (plan, track,
 - ✅ **Programs module** (first of the seven; `src/app/(app)/programs/`): list + quick-create drawer + detail page (first instance of the universal detail template) + edit + archive (soft delete). Rollout-scoped queries, client-visibility filtering, `assertCan('structure:manage')` on every mutation. **Vitest wired into CI** (`npm test`): permission matrix pinned as executable spec + schema tests per module. Server-action conventions now recorded in [`docs/10`](./docs/10_api_specification.md).
 - ✅ **Workstreams module** (2 of 7; `src/app/(app)/workstreams/`): list with programme + manual progress meter, create drawer with programme picker (Domain Rule 2 validated server-side, `rollout_id` denormalized per docs/09 §2), detail/edit (incl. progress 0–100) + archive. Programme detail now embeds its live workstreams with preselected quick-create.
 - ✅ **Operations module** (3 of 7; `src/app/(app)/operations/`): one tabbed daily workspace — Tasks · Milestones · Risks · Issues · Decisions (PRD §18 Release 2 set; Dependencies/Action Items marked as a later slice). Per-entity guards from the docs/14 matrix; Domain Rules 3/4/6/7 enforced server-side (risk owner via `getOrCreateSelfStakeholder`, decisions affect the rollout). Shared `EntityDrawer` powers all create/edit drawers.
-- ⬜ Remaining modules in order: Knowledge → Timeline → Reports → Administration. Each: build → tests → docs → PR.
+- ✅ **Knowledge module** (4 of 7; `src/app/(app)/knowledge/`): one tabbed hub — Documents · Meetings · Notes · Updates (PRD §18 Release 3 set; meeting participants/actions marked as a later slice). Documents are referenced, never duplicated (Domain Rule 9): `url` required, restricted to http(s) so stored links are safe to render as hrefs. Guards split per docs/14: create doc/note = `knowledge:contribute`, everything else = `knowledge:manage`. `EntityDrawer` + universal field specs promoted to `src/components/` (shared with Operations).
+- ⬜ Remaining modules in order: Timeline → Reports → Administration. Each: build → tests → docs → PR.
 - ⚠️ **Supabase built-in SMTP did not deliver** during verification (auth links were verified via admin `generateLink` instead). Configure custom SMTP before any real users need auth emails. Also confirm the dashboard email templates match SETUP.md §3 (incl. the Reset Password template).
 
 ## Where the context lives
@@ -63,7 +64,7 @@ npm run dev             # http://localhost:3000
 
 ## Likely next steps
 
-1. **Module 3 — Operations** (`Tasks · Milestones · Risks · Issues · Dependencies · Decisions · Action Items`, docs/05/07: single tabbed daily workspace), then Knowledge → Timeline → Reports → Administration, one PR each.
+1. **Remaining modules** — Timeline → Reports → Administration, one PR each (build → tests → docs/10 + HANDOFF → PR).
 2. **Wire the Command Center** sections to live data as their owning modules land (placeholder data is disclosed in the UI until then).
 3. **Doc 08 — Design System** (grid, spacing, type, components, states) — the shell currently leans on shadcn defaults.
 4. Later platform chores: org/rollout editing + soft-delete Prisma extension (docs/09), **custom SMTP** for auth emails (built-in sender unreliable), **Vercel deployment** (SETUP.md §8).
