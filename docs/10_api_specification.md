@@ -114,6 +114,21 @@ server-side as a live phase of the caller's rollout — the FK alone would
 accept another rollout's phase id (docs/09 §2: consistency is service-layer
 enforced).
 
+## Reports (`src/app/(app)/reports/page.tsx`)
+
+No server actions — the four MVP reports (Executive · Weekly · Risk ·
+Readiness, docs/07) are **generated from operational data at request time**,
+never maintained by hand (docs/05 rule 4). Viewing requires
+`reports:generate` via `requireCan` (the first module page behind it —
+engineering and client roles land on `/unauthorized`).
+
+Aggregation logic is pure and unit-tested (`reports/lib.ts`): risk severity
+(probability × impact, 1–9) and worst-first ranking · readiness roll-up
+(ready only when every dimension is) · mean manual workstream progress ·
+reporting-window arithmetic. The weekly report windows on the last 7 days
+(completed tasks, newly logged risks/issues/decisions) plus blocked-now and
+due-in-14-days lists.
+
 ## Testing
 
 `npm test` (Vitest, in CI): the permission matrix is pinned as an executable
