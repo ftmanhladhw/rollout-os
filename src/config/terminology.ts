@@ -1,4 +1,12 @@
-import type { DocumentType, LifecycleStatus, Priority, UpdateType } from '@prisma/client';
+import type {
+  DocumentType,
+  Health,
+  LifecycleStatus,
+  Priority,
+  ReadinessStatus,
+  RiskLevel,
+  UpdateType,
+} from '@prisma/client';
 
 /**
  * Display labels for stored enum values. This is the seed of the terminology
@@ -41,6 +49,24 @@ export const UPDATE_TYPE_LABELS: Record<UpdateType, string> = {
   daily: 'Daily',
   weekly: 'Weekly',
   executive: 'Executive',
+};
+
+export const HEALTH_LABELS: Record<Health, string> = {
+  green: 'Green',
+  amber: 'Amber',
+  red: 'Red',
+};
+
+export const READINESS_STATUS_LABELS: Record<ReadinessStatus, string> = {
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  ready: 'Ready',
+};
+
+export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
 };
 
 /**
