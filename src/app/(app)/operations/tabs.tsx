@@ -22,16 +22,16 @@ import {
   updateRisk,
   updateTask,
 } from './actions';
-import { EntityDrawer, type FieldSpec } from './entity-drawer';
+import { EntityDrawer, type FieldSpec } from '@/components/entity-drawer';
 import {
-  RISK_LEVEL_OPTIONS,
   descriptionField,
   dueDateField,
   nameField,
   priorityField,
   statusField,
   toDateInput,
-} from './field-configs';
+} from '@/components/entity-fields';
+import { RISK_LEVEL_OPTIONS } from './field-configs';
 
 /**
  * The five live Operations tabs (PRD §18 Release 2 set). Every tab has the

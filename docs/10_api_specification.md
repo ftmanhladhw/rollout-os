@@ -79,6 +79,26 @@ outside the PRD §18 release set); their tabs are marked as later work.
 All drawers are the shared `EntityDrawer` (server actions passed as props;
 Zod on the server is the validation authority).
 
+## Knowledge (`src/app/(app)/knowledge/actions.ts`)
+
+One tabbed screen (docs/05), four entities — the PRD §18 Release 3 set.
+Documents are referenced, never duplicated (Domain Rule 9). Guards split per
+the docs/14 matrix: creating documents and notes is contribution
+(`knowledge:contribute` — the engineering role holds it); every other
+mutation, including all edits and archives, is curation (`knowledge:manage`).
+
+| Entity   | Create guard           | Update/archive guard | Notable rules                                                                                                            |
+| -------- | ---------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Document | `knowledge:contribute` | `knowledge:manage`   | `url` required and restricted to http(s) — stored links render as hrefs, so `javascript:`/`data:` schemes never validate |
+| Meeting  | `knowledge:manage`     | `knowledge:manage`   | Optional `meetingDate`, `agenda`, `summary`, http(s)-only `recordingUrl`; participants & meeting actions — later slice   |
+| Note     | `knowledge:contribute` | `knowledge:manage`   | Simple markdown `body` (≤10k chars), stored verbatim, rendered as text                                                   |
+| Update   | `knowledge:manage`     | `knowledge:manage`   | `updateType` is `daily·weekly·executive`                                                                                 |
+
+The `EntityDrawer` and the universal field specs were promoted to
+`src/components/entity-drawer.tsx` / `src/components/entity-fields.ts` —
+shared by Operations and Knowledge (and future modules); each module keeps
+only its own option sets in a local `field-configs.ts`.
+
 ## Testing
 
 `npm test` (Vitest, in CI): the permission matrix is pinned as an executable

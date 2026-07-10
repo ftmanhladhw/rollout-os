@@ -29,7 +29,7 @@ const selectClassName =
   'border-input focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]';
 
 /**
- * One drawer for every Operations entity form (docs/07: drawers for quick
+ * One drawer for every module's entity forms (docs/07: drawers for quick
  * edits). Field lists are config; validation authority is the server action
  * (Zod), whose first error renders inline. Server actions arrive as props —
  * they serialize across the RSC boundary.
