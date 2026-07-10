@@ -66,6 +66,15 @@ describe('dates and statuses', () => {
     expect(createTaskSchema.safeParse({ ...base, dueDate: '01/08/2026' }).success).toBe(false);
   });
 
+  it('phase is optional on milestones: uuid or empty (unset), nothing else', () => {
+    const base = { workstreamId: UUID, name: 'UAT done' };
+    expect(createMilestoneSchema.safeParse({ ...base, phaseId: UUID }).success).toBe(true);
+    const empty = createMilestoneSchema.safeParse({ ...base, phaseId: '' });
+    expect(empty.success).toBe(true);
+    if (empty.success) expect(empty.data.phaseId).toBeUndefined();
+    expect(createMilestoneSchema.safeParse({ ...base, phaseId: 'discovery' }).success).toBe(false);
+  });
+
   it('rejects archived as a settable status everywhere', () => {
     expect(
       updateTaskSchema.safeParse({ id: UUID, name: 'T', status: 'archived', priority: 'low' })

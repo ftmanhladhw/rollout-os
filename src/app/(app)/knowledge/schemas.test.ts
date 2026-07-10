@@ -57,6 +57,14 @@ describe('meeting recording link', () => {
     ).toBe(false);
   });
 
+  it('phase is optional on meetings: uuid or empty (unset), nothing else', () => {
+    expect(createMeetingSchema.safeParse({ name: 'Sync', phaseId: UUID }).success).toBe(true);
+    const empty = createMeetingSchema.safeParse({ name: 'Sync', phaseId: '' });
+    expect(empty.success).toBe(true);
+    if (empty.success) expect(empty.data.phaseId).toBeUndefined();
+    expect(createMeetingSchema.safeParse({ name: 'Sync', phaseId: 'uat' }).success).toBe(false);
+  });
+
   it('accepts YYYY-MM-DD meeting dates and rejects other formats', () => {
     expect(createMeetingSchema.safeParse({ name: 'Sync', meetingDate: '2026-07-10' }).success).toBe(
       true,

@@ -60,6 +60,13 @@ const documentType = z.enum([
 const updateType = z.enum(['daily', 'weekly', 'executive']);
 const id = z.string().uuid();
 
+/** Optional phase assignment (the timeline groups by it); empty = none. */
+const optionalPhaseId = z
+  .string()
+  .uuid()
+  .optional()
+  .or(z.literal('').transform(() => undefined));
+
 // --- Documents (Domain Rule 9: referenced, never duplicated — url required) ---
 export const createDocumentSchema = z.object({
   name,
@@ -87,6 +94,7 @@ export const createMeetingSchema = z.object({
   agenda: optionalText(4000, 'Agenda'),
   summary: optionalText(4000, 'Summary'),
   recordingUrl: optionalHttpUrl,
+  phaseId: optionalPhaseId,
 });
 export const updateMeetingSchema = z.object({
   id,
@@ -98,6 +106,7 @@ export const updateMeetingSchema = z.object({
   agenda: optionalText(4000, 'Agenda'),
   summary: optionalText(4000, 'Summary'),
   recordingUrl: optionalHttpUrl,
+  phaseId: optionalPhaseId,
 });
 
 // --- Notes (simple markdown body) ---
