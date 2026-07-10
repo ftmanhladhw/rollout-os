@@ -8,14 +8,14 @@ Rollout OS — a generalized **rollout & delivery command center** (plan, track,
 
 ## Current status (as of this handoff)
 
-**Platform layer complete (architecture + auth + schema + authz) — no product features yet.**
+**Platform layer complete; product build underway — shell, onboarding, Command Center IA, and modules 1–2 of 7 (Programs, Workstreams) are live on `main`.**
 
 - ✅ Next.js 15 app architecture in place and building (`main` is green-verified).
 - ✅ Supabase auth wired end-to-end (email/password + magic link + **password reset**, default-deny middleware, private storage bucket). Platform runbook: [`SETUP.md`](./SETUP.md).
 - ✅ **Supabase project live** (ref `jamxiphauthjcljyihmr`): migrations applied, `setup.sql` run, and every auth flow verified in the real app (signup → confirm → sign-out → password login → magic link → password reset; signup trigger auto-creates `profiles`).
 - ✅ Full MVP domain schema: 27 tables with RLS, in `prisma/schema.prisma` + migrations. Design record: [`docs/09`](./docs/09_database_design.md).
 - ✅ **Authorization model**: 7 org-scoped roles (`member_role`) + super-admin flag; static permission matrix with `can()`/`assertCan()` in `src/lib/authz/`; experience profiles kept separate from RBAC. Denied-path surfaces: `requireCan()` → `/unauthorized` page for denied views, typed `ForbiddenError` → `(app)/error.tsx` boundary for denied mutations. Design record: [`docs/14`](./docs/14_auth_authorization.md).
-- ✅ Product docs **01–07, 09, and 14 populated**; **08 and 10–13 are placeholders**.
+- ✅ Product docs **01–07, 09, 10, and 14 populated** ([`docs/10`](./docs/10_api_specification.md) is the living server-action API spec, growing per module); **08 and 11–13 are placeholders**.
 - ✅ **Application shell** (`src/app/(app)` + `src/components/shell/`): responsive sidebar (mobile nav sheet), header with breadcrumbs, global-search placeholder (⌘K palette comes later), user menu (settings entry, theme light/dark/system via next-themes, sign-out), and placeholder pages for the seven lifecycle destinations + settings. Verified end-to-end in the real app (see `.claude/skills/verify/SKILL.md`).
 - ✅ **Onboarding** (`src/app/onboarding/` + gate in the `(app)` layout): first login → create organization (founder becomes `org_admin` atomically) → create first rollout (seeds the 8 doc-04 phases + 7 readiness dimensions from `src/config/rollout-defaults.ts`) → Command Center. Both steps idempotent; org creation is the one deliberately unguarded mutation (matrix is org-scoped, no org exists yet — recorded in docs/14).
 - ✅ **Command Center IA** (`src/components/command-center/`): vital-signs strip (Health · Progress · Readiness · Go Live) + five sections (Today's Priorities, Blockers, Upcoming Milestones, My Work, Recent Activity), each linking to its owning module. Layout/UX real; **content is placeholder** (`placeholder-data.ts`, disclosed in the UI) until each module lands. Semantic status tokens (`--status-good/warning/critical`) in globals.css — color never carries meaning without a text label (docs/07 ch.6).
@@ -50,19 +50,21 @@ npm run dev             # http://localhost:3000
 
 ## Kickoff prompt for a fresh session
 
-> Read `CLAUDE.md`, `ARCHITECTURE.md`, and everything in `docs/` to load full context. This is Rollout OS — a greenfield Next.js 15 app. The platform layer is complete (Supabase auth live and verified, 27-table domain schema with RLS, RBAC + experience-profile model in `src/lib/authz/`), but no product features exist yet. Summarize the current state and the intended next steps, then wait for my instruction.
+> Read `CLAUDE.md`, `ARCHITECTURE.md`, `docs/10`, and `docs/14` to load context. This is Rollout OS — a Next.js 15 app on live Supabase. Platform layer, app shell, onboarding, Command Center IA, and the Programs + Workstreams modules are done (see HANDOFF "Current status"); modules are being built incrementally in the order Operations → Knowledge → Timeline → Reports → Administration, each with tests (Vitest, in CI), a docs/10 update, and its own PR. Summarize the current state and wait for my instruction.
 
 ## Working rules (enforced)
 
 - **Branch → PR → merge.** No direct pushes to `main` (a safety hook blocks `git push …main/master` and force-pushes).
 - **Conventional Commits** required (commit-msg hook + CI). Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
-- Before pushing: `npm run format:check && npm run lint && npm run typecheck && npm run build`.
-- CI (GitHub Actions) runs lint, format, type-check, and `next build` on Node 22 & 24. Runners are often slow to start — a "queued" run is normal, not a failure.
+- Before pushing: `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`.
+- CI (GitHub Actions) runs lint, format, type-check, **Vitest**, and `next build` on Node 22 & 24. Runners are often slow to start — a "queued" run is normal, not a failure.
+- Every module lands as its own PR: build → verify end-to-end (`.claude/skills/verify/SKILL.md`) → tests → docs/10 + HANDOFF update → PR.
 
 ## Likely next steps
 
-1. **Doc 08 — Design System** (grid, spacing, type, components, states) — the UX spec (doc 07) explicitly tees this up; the shell currently leans on shadcn defaults.
-2. **Release 1 feature code** (PRD §18): Organization and Rollout _creation_ shipped with onboarding (incl. per-rollout seeding). Remaining: Programmes · Workstreams CRUD, editing/archiving for orgs and rollouts, the soft-delete Prisma extension (docs/09), and `assertCan()`/`requireCan()` guards as each surface lands (docs/14).
-3. **Custom SMTP** for auth emails (built-in sender unreliable) and **Vercel deployment** (SETUP.md §8) once Release 1 has something to show.
+1. **Module 3 — Operations** (`Tasks · Milestones · Risks · Issues · Dependencies · Decisions · Action Items`, docs/05/07: single tabbed daily workspace), then Knowledge → Timeline → Reports → Administration, one PR each.
+2. **Wire the Command Center** sections to live data as their owning modules land (placeholder data is disclosed in the UI until then).
+3. **Doc 08 — Design System** (grid, spacing, type, components, states) — the shell currently leans on shadcn defaults.
+4. Later platform chores: org/rollout editing + soft-delete Prisma extension (docs/09), **custom SMTP** for auth emails (built-in sender unreliable), **Vercel deployment** (SETUP.md §8).
 
 Nothing is stranded in any past chat — this repo is the single source of truth.
