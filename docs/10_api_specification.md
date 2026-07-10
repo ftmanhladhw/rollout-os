@@ -60,6 +60,25 @@ Reads follow the same rules as programmes. The programme detail page embeds
 its live workstreams (same visibility filtering) with a quick-create that
 preselects the parent programme.
 
+## Operations (`src/app/(app)/operations/actions.ts`)
+
+One tabbed screen (docs/07), five entities — the PRD §18 Release 2 set.
+Guards follow the docs/14 matrix per entity. Create/update/archive triplets
+all follow the standard conventions; the notable per-entity rules:
+
+| Entity    | Guard                | Notable rules                                                                                                                                                                                  |
+| --------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone | `structure:manage`   | `workstreamId` must be a live row in the caller's rollout (Domain Rule 3); optional `dueDate`                                                                                                  |
+| Task      | `operations:execute` | `milestoneId` must be a live row in the caller's rollout (Domain Rule 4); `status = completed` stamps `completedAt`                                                                            |
+| Risk      | `operations:manage`  | Owner is required (Domain Rule 6) — filled server-side with the caller's stakeholder via `getOrCreateSelfStakeholder` (`src/lib/stakeholder.ts`); `probability`/`impact` are `low·medium·high` |
+| Issue     | `operations:execute` | Optional `resolution`; `status = completed` stamps `resolvedAt`                                                                                                                                |
+| Decision  | `operations:manage`  | Affects an entity (Domain Rule 7) — this slice records every decision against the rollout itself (`affects_entity_type = 'rollout'`)                                                           |
+
+Dependencies and Action Items are deliberately not in this slice (they are
+outside the PRD §18 release set); their tabs are marked as later work.
+All drawers are the shared `EntityDrawer` (server actions passed as props;
+Zod on the server is the validation authority).
+
 ## Testing
 
 `npm test` (Vitest, in CI): the permission matrix is pinned as an executable
