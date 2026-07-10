@@ -69,6 +69,8 @@ Decisions on record:
 
 Signed-out users hit neither: default-deny middleware redirects them to `/login` before any page code runs.
 
+**One deliberately unguarded mutation: organization creation.** The matrix is org-scoped and no organization exists yet at that point — any authenticated user may found one and becomes its `org_admin` in the same atomic create (onboarding step 1). Every other mutation starts with `assertCan`.
+
 ### Experience Profiles (Layer 3)
 
 `organization_members.experience_profile` (5 values, doc 04): `executive · programme_manager · engineering · consultant · client`. Initialized from the role via `DEFAULT_EXPERIENCE_PROFILE`, independently changeable. Controls landing page, navigation, visible modules, widgets, default filters — to be consumed by `src/config/experience-profiles.ts` when UI modules exist. **Never consulted in a permission check.**
