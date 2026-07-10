@@ -129,6 +129,23 @@ reporting-window arithmetic. The weekly report windows on the last 7 days
 (completed tasks, newly logged risks/issues/decisions) plus blocked-now and
 due-in-14-days lists.
 
+## Administration (`src/app/(app)/settings/actions.ts`)
+
+The Administration surface stays outside the primary nav (docs/07 ch.3) and
+gates each tab by its own action; holders of neither land on
+`/unauthorized`. MVP slice: Members + Rollout settings — teams, templates
+(a docs/09 scope-out), and invites are later slices.
+
+| Action                                                                         | Guard            | Effect                                                                                                                                           |
+| ------------------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `updateMember({ id, role, experienceProfile })`                                | `org:manage`     | Org-scoped role/profile change; **refuses to demote the last org_admin** so the admin surface can't lock itself out                              |
+| `removeMember({ id })`                                                         | `org:manage`     | Org-scoped **hard delete** (docs/09: revoking access must be immediate); same last-admin protection                                              |
+| `updateRollout({ name, description?, status, health, priority, goLiveDate? })` | `rollout:manage` | Org-scoped update of the manual vitals (health `green·amber·red`, editable statuses only); revalidates the whole layout (vitals show everywhere) |
+| `updateReadiness({ id, status })`                                              | `rollout:manage` | Rollout-scoped manual assessment per dimension (`not_started·in_progress·ready`)                                                                 |
+
+Roles are the docs/14 seven; `is_super_admin` is a platform flag settable
+only via SQL and is deliberately absent from the assignable set.
+
 ## Testing
 
 `npm test` (Vitest, in CI): the permission matrix is pinned as an executable
