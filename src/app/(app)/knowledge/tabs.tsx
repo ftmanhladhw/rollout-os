@@ -201,21 +201,29 @@ export async function DocumentsTab({ context }: { context: RolloutContext }) {
 
 export async function MeetingsTab({ context }: { context: RolloutContext }) {
   const canManage = can(context.ctx, 'knowledge:manage');
-  const meetings = await db.meeting.findMany({
-    where: { rolloutId: context.rollout.id, deletedAt: null, ...visibility(context) },
-    orderBy: [{ meetingDate: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      status: true,
-      priority: true,
-      meetingDate: true,
-      agenda: true,
-      summary: true,
-      recordingUrl: true,
-    },
-  });
+  const [meetings, phases] = await Promise.all([
+    db.meeting.findMany({
+      where: { rolloutId: context.rollout.id, deletedAt: null, ...visibility(context) },
+      orderBy: [{ meetingDate: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        status: true,
+        priority: true,
+        meetingDate: true,
+        agenda: true,
+        summary: true,
+        recordingUrl: true,
+        phaseId: true,
+      },
+    }),
+    db.phase.findMany({
+      where: { rolloutId: context.rollout.id, deletedAt: null },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   const meetingFields: FieldSpec[] = [
     nameField,
@@ -223,6 +231,16 @@ export async function MeetingsTab({ context }: { context: RolloutContext }) {
     { name: 'agenda', label: 'Agenda', type: 'textarea' },
     { name: 'summary', label: 'Notes', type: 'textarea' },
     { name: 'recordingUrl', label: 'Recording link', type: 'text', placeholder: 'https://…' },
+    // The timeline groups meetings by phase — assignment happens here.
+    {
+      name: 'phaseId',
+      label: 'Phase',
+      type: 'select',
+      options: [
+        { value: '', label: 'No phase' },
+        ...phases.map((p) => ({ value: p.id, label: p.name })),
+      ],
+    },
     descriptionField,
   ];
 
@@ -263,6 +281,7 @@ export async function MeetingsTab({ context }: { context: RolloutContext }) {
                       agenda: m.agenda ?? '',
                       summary: m.summary ?? '',
                       recordingUrl: m.recordingUrl ?? '',
+                      phaseId: m.phaseId ?? '',
                     }}
                     action={updateMeeting}
                     archiveAction={archiveMeeting}

@@ -43,6 +43,20 @@ function done(message: string): ActionResult {
   return { success: message };
 }
 
+/**
+ * A phase reference must be a live phase of the caller's rollout — the FK
+ * alone would accept another rollout's phase id (docs/09 §2 consistency is
+ * service-layer enforced). Returns false when the reference is bad.
+ */
+async function phaseIsValid(phaseId: string | undefined, rolloutId: string): Promise<boolean> {
+  if (!phaseId) return true;
+  const phase = await db.phase.findFirst({
+    where: { id: phaseId, rolloutId, deletedAt: null },
+    select: { id: true },
+  });
+  return phase !== null;
+}
+
 // --- Documents ---
 
 export async function createDocument(input: unknown): Promise<ActionResult> {
@@ -102,6 +116,7 @@ export async function createMeeting(input: unknown): Promise<ActionResult> {
   const parsed = createMeetingSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the fields.' };
   const { rollout, userId } = await guarded('knowledge:manage');
+  if (!(await phaseIsValid(parsed.data.phaseId, rollout.id))) return { error: 'Phase not found.' };
 
   await db.meeting.create({
     data: {
@@ -112,6 +127,7 @@ export async function createMeeting(input: unknown): Promise<ActionResult> {
       agenda: parsed.data.agenda,
       summary: parsed.data.summary,
       recordingUrl: parsed.data.recordingUrl,
+      phaseId: parsed.data.phaseId,
       createdBy: userId,
     },
   });
@@ -123,7 +139,9 @@ export async function updateMeeting(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the fields.' };
   const { rollout, userId } = await guarded('knowledge:manage');
 
-  const { id, description, meetingDate, agenda, summary, recordingUrl, ...data } = parsed.data;
+  const { id, description, meetingDate, agenda, summary, recordingUrl, phaseId, ...data } =
+    parsed.data;
+  if (!(await phaseIsValid(phaseId, rollout.id))) return { error: 'Phase not found.' };
   const result = await db.meeting.updateMany({
     where: { id, rolloutId: rollout.id, deletedAt: null },
     data: {
@@ -133,6 +151,7 @@ export async function updateMeeting(input: unknown): Promise<ActionResult> {
       agenda: agenda ?? null,
       summary: summary ?? null,
       recordingUrl: recordingUrl ?? null,
+      phaseId: phaseId ?? null,
       updatedBy: userId,
     },
   });

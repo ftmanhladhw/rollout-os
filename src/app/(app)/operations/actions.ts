@@ -46,6 +46,20 @@ function done(message: string): ActionResult {
   return { success: message };
 }
 
+/**
+ * A phase reference must be a live phase of the caller's rollout — the FK
+ * alone would accept another rollout's phase id (docs/09 §2 consistency is
+ * service-layer enforced). Returns false when the reference is bad.
+ */
+async function phaseIsValid(phaseId: string | undefined, rolloutId: string): Promise<boolean> {
+  if (!phaseId) return true;
+  const phase = await db.phase.findFirst({
+    where: { id: phaseId, rolloutId, deletedAt: null },
+    select: { id: true },
+  });
+  return phase !== null;
+}
+
 // --- Milestones ---
 
 export async function createMilestone(input: unknown): Promise<ActionResult> {
@@ -58,6 +72,7 @@ export async function createMilestone(input: unknown): Promise<ActionResult> {
     select: { id: true },
   });
   if (!workstream) return { error: 'Workstream not found.' };
+  if (!(await phaseIsValid(parsed.data.phaseId, rollout.id))) return { error: 'Phase not found.' };
 
   await db.milestone.create({
     data: {
@@ -66,6 +81,7 @@ export async function createMilestone(input: unknown): Promise<ActionResult> {
       name: parsed.data.name,
       description: parsed.data.description,
       dueDate: toDate(parsed.data.dueDate),
+      phaseId: parsed.data.phaseId,
       createdBy: userId,
     },
   });
@@ -77,13 +93,15 @@ export async function updateMilestone(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the fields.' };
   const { rollout, userId } = await guarded('structure:manage');
 
-  const { id, dueDate, description, ...data } = parsed.data;
+  const { id, dueDate, description, phaseId, ...data } = parsed.data;
+  if (!(await phaseIsValid(phaseId, rollout.id))) return { error: 'Phase not found.' };
   const result = await db.milestone.updateMany({
     where: { id, rolloutId: rollout.id, deletedAt: null },
     data: {
       ...data,
       description: description ?? null,
       dueDate: toDate(dueDate),
+      phaseId: phaseId ?? null,
       updatedBy: userId,
     },
   });

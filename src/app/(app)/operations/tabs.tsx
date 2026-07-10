@@ -94,7 +94,7 @@ const newButton = (label: string) => <Button size="sm">{label}</Button>;
 
 export async function MilestonesTab({ context }: { context: RolloutContext }) {
   const canManage = can(context.ctx, 'structure:manage');
-  const [milestones, workstreams] = await Promise.all([
+  const [milestones, workstreams, phases] = await Promise.all([
     db.milestone.findMany({
       where: { rolloutId: context.rollout.id, deletedAt: null, ...visibility(context) },
       orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
@@ -105,6 +105,7 @@ export async function MilestonesTab({ context }: { context: RolloutContext }) {
         status: true,
         priority: true,
         dueDate: true,
+        phaseId: true,
         workstream: { select: { name: true } },
       },
     }),
@@ -113,7 +114,23 @@ export async function MilestonesTab({ context }: { context: RolloutContext }) {
       orderBy: { createdAt: 'asc' },
       select: { id: true, name: true },
     }),
+    db.phase.findMany({
+      where: { rolloutId: context.rollout.id, deletedAt: null },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true },
+    }),
   ]);
+
+  // The timeline groups milestones by phase — assignment happens here.
+  const phaseField: FieldSpec = {
+    name: 'phaseId',
+    label: 'Phase',
+    type: 'select',
+    options: [
+      { value: '', label: 'No phase' },
+      ...phases.map((p) => ({ value: p.id, label: p.name })),
+    ],
+  };
 
   const createFields: FieldSpec[] = [
     {
@@ -125,8 +142,16 @@ export async function MilestonesTab({ context }: { context: RolloutContext }) {
     nameField,
     descriptionField,
     dueDateField,
+    phaseField,
   ];
-  const editFields = [nameField, statusField, priorityField, dueDateField, descriptionField];
+  const editFields = [
+    nameField,
+    statusField,
+    priorityField,
+    dueDateField,
+    phaseField,
+    descriptionField,
+  ];
 
   if (workstreams.length === 0) {
     return (
@@ -172,6 +197,7 @@ export async function MilestonesTab({ context }: { context: RolloutContext }) {
                       status: m.status,
                       priority: m.priority,
                       dueDate: toDateInput(m.dueDate),
+                      phaseId: m.phaseId ?? '',
                     }}
                     action={updateMilestone}
                     archiveAction={archiveMilestone}

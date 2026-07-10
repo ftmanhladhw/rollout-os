@@ -34,12 +34,20 @@ const priority = z.enum(['low', 'medium', 'high', 'critical']);
 const riskLevel = z.enum(['low', 'medium', 'high']);
 const id = z.string().uuid();
 
+/** Optional phase assignment (the timeline groups by it); empty = none. */
+const optionalPhaseId = z
+  .string()
+  .uuid()
+  .optional()
+  .or(z.literal('').transform(() => undefined));
+
 // --- Milestones (Domain Rule 3: belongs to a workstream) ---
 export const createMilestoneSchema = z.object({
   workstreamId: z.string().uuid('Choose a workstream.'),
   name,
   description,
   dueDate: optionalDate,
+  phaseId: optionalPhaseId,
 });
 export const updateMilestoneSchema = z.object({
   id,
@@ -48,6 +56,7 @@ export const updateMilestoneSchema = z.object({
   status,
   priority,
   dueDate: optionalDate,
+  phaseId: optionalPhaseId,
 });
 
 // --- Tasks (Domain Rule 4: contributes to a milestone) ---

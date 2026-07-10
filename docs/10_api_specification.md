@@ -99,6 +99,21 @@ The `EntityDrawer` and the universal field specs were promoted to
 shared by Operations and Knowledge (and future modules); each module keeps
 only its own option sets in a local `field-configs.ts`.
 
+## Timeline (`src/app/(app)/timeline/page.tsx`)
+
+No server actions — the timeline is a **pure projection** (docs/05: views
+never duplicate data). One server-component read: the rollout's phases in
+`sortOrder`, each grouping its milestones and meetings (dated first, undated
+last; unphased items in a trailing group), plus the Go Live marker from
+`rollouts.go_live_date`. Grouping/countdown logic is pure and unit-tested
+(`timeline/lib.ts`).
+
+To feed it, `phaseId` became assignable on milestones (Operations) and
+meetings (Knowledge): optional in their create/update schemas, validated
+server-side as a live phase of the caller's rollout — the FK alone would
+accept another rollout's phase id (docs/09 §2: consistency is service-layer
+enforced).
+
 ## Testing
 
 `npm test` (Vitest, in CI): the permission matrix is pinned as an executable
