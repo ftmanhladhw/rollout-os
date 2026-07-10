@@ -16,7 +16,8 @@ Rollout OS — a generalized **rollout & delivery command center** (plan, track,
 - ✅ Full MVP domain schema: 27 tables with RLS, in `prisma/schema.prisma` + migrations. Design record: [`docs/09`](./docs/09_database_design.md).
 - ✅ **Authorization model**: 7 org-scoped roles (`member_role`) + super-admin flag; static permission matrix with `can()`/`assertCan()` in `src/lib/authz/`; experience profiles kept separate from RBAC. Design record: [`docs/14`](./docs/14_auth_authorization.md).
 - ✅ Product docs **01–07, 09, and 14 populated**; **08 and 10–13 are placeholders**.
-- ⬜ No feature code yet.
+- ✅ **Application shell** (`src/app/(app)` + `src/components/shell/`): responsive sidebar (mobile nav sheet), header with breadcrumbs, global-search placeholder (⌘K palette comes later), user menu (settings entry, theme light/dark/system via next-themes, sign-out), and placeholder pages for the seven lifecycle destinations + settings. Verified end-to-end in the real app (see `.claude/skills/verify/SKILL.md`).
+- ⬜ No feature code yet — all shell pages are empty-state placeholders.
 - ⚠️ **Supabase built-in SMTP did not deliver** during verification (auth links were verified via admin `generateLink` instead). Configure custom SMTP before any real users need auth emails. Also confirm the dashboard email templates match SETUP.md §3 (incl. the Reset Password template).
 
 ## Where the context lives
@@ -56,7 +57,7 @@ npm run dev             # http://localhost:3000
 
 ## Likely next steps
 
-1. **Doc 08 — Design System** (grid, spacing, type, components, states) — the UX spec (doc 07) explicitly tees this up.
+1. **Doc 08 — Design System** (grid, spacing, type, components, states) — the UX spec (doc 07) explicitly tees this up; the shell currently leans on shadcn defaults.
 2. **Release 1 feature code** (PRD §18): Organization · Rollout · Programmes · Workstreams CRUD — includes the soft-delete Prisma extension, per-rollout seeding of phases/readiness dimensions (docs/09 conventions), and `assertCan()` at the top of every server action (docs/14).
 3. **Custom SMTP** for auth emails (built-in sender unreliable) and **Vercel deployment** (SETUP.md §8) once Release 1 has something to show.
 
