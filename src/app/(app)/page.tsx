@@ -1,15 +1,23 @@
 import type { Metadata } from 'next';
-import { PagePlaceholder } from '@/components/shell/page-placeholder';
+import { VitalSigns } from '@/components/command-center/vital-signs';
+import {
+  Blockers,
+  MyWork,
+  RecentActivity,
+  TodaysPriorities,
+  UpcomingMilestones,
+} from '@/components/command-center/sections';
 import { db } from '@/lib/db';
 import { getOnboardingState } from '@/lib/onboarding';
 
 export const metadata: Metadata = { title: 'Command Center' };
 
 /**
- * The landing destination — Mission Control, not a dashboard (docs/07,
- * Chapter 1). The (app) layout guarantees an organization and rollout exist.
- * Still a placeholder body: the vital signs (Health · Progress · Readiness ·
- * Go Live) and cockpit sections arrive with the next Release 1 slices.
+ * The Command Center — Mission Control, not a dashboard (docs/07 ch.1).
+ * Layout and information architecture are real; section content is
+ * placeholder until each owning module lands (see placeholder-data.ts).
+ * Priority order per docs/07: vitals → what needs attention → what's coming
+ * → my slice → what changed.
  */
 export default async function CommandCenterPage() {
   const state = await getOnboardingState();
@@ -20,10 +28,28 @@ export default async function CommandCenterPage() {
   });
 
   return (
-    <PagePlaceholder
-      title="Command Center"
-      question="What is happening?"
-      description={`${rollout?.name ?? 'Your rollout'} is set up with the standard phases and readiness dimensions. Vital signs (Health, Progress, Readiness, Go Live), milestones, risks, and decisions appear here as the rollout takes shape.`}
-    />
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="text-xl font-semibold tracking-tight">Command Center</h1>
+        <p className="text-muted-foreground text-sm">{rollout?.name}</p>
+        <p className="text-muted-foreground/70 ml-auto text-xs">
+          Sample data — wiring lands with each module
+        </p>
+      </header>
+
+      <VitalSigns />
+
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+          <TodaysPriorities />
+          <Blockers />
+          <UpcomingMilestones />
+        </div>
+        <div className="flex min-w-0 flex-col gap-6">
+          <MyWork />
+          <RecentActivity />
+        </div>
+      </div>
+    </div>
   );
 }
