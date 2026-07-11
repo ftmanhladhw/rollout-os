@@ -15,6 +15,24 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   // No sensors/camera/mic needed by this app.
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // Report-only CSP first: observe violations without breaking anything,
+  // then promote to enforcing once the report stream is clean. Next.js
+  // injects inline scripts/styles, hence 'unsafe-inline' (a nonce-based
+  // enforcing policy is the follow-up); connect-src covers Supabase auth.
+  {
+    key: 'Content-Security-Policy-Report-Only',
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' blob: data:",
+      "font-src 'self'",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; '),
+  },
 ];
 
 const nextConfig: NextConfig = {
