@@ -1005,6 +1005,17 @@ model ActivityLog {
   @@map("activity_log")
 }
 
+/// Fixed-window rate-limit buckets (auth actions). Service-layer only:
+/// RLS is enabled with no policies, so PostgREST roles can neither read nor
+/// write. Rows are transient and hard-deleted opportunistically.
+model RateLimit {
+  key       String   @id
+  count     Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("rate_limits")
+}
+
 /// In-app notifications (PRD §14). Produced from Release 4 onward.
 model Notification {
   id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

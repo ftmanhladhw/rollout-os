@@ -37,6 +37,19 @@ public API ships later, it inherits these semantics.
    one unlogged mutation family (org-scoped; `activity_log` rows are
    rollout-scoped — an org-level audit surface is future work).
 
+## Auth (`src/app/(auth)/actions.ts`)
+
+Sign-in, sign-up, magic-link, and password-reset actions follow the same
+Zod-first convention, plus two hardenings:
+
+- **Rate limiting** — fixed-window buckets in Postgres (`rate_limits`,
+  RLS-locked to the service connection; `src/lib/rate-limit.ts`), keyed by
+  client IP (+ email where credential-guessing matters). Login 10/5 min,
+  signup 5/hour, magic link and reset 3/15 min. **Fail-open by design**: a
+  limiter failure logs loudly but never blocks auth.
+- **Generic error copy** — Supabase error codes map to our own messages
+  (`authErrorMessage`); raw provider text never reaches the user.
+
 ## Onboarding (`src/app/onboarding/actions.ts`)
 
 | Action                                      | Guard                                     | Effect                                                                                                                |
