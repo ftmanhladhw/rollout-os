@@ -30,6 +30,7 @@ Rollout OS — a generalized **rollout & delivery command center** (plan, track,
 - ✅ **Audit trail live**: every mutating server action appends to `activity_log` via `src/lib/activity.ts` (docs/10 convention 7); the Command Center **Recent Activity** section now reads it (first live section — the other four are still placeholder). Exception: member management (org-scoped, no rollout to log against).
 - ✅ **Auth hardening**: fixed-window rate limiting on login/signup/magic-link/reset (`src/lib/rate-limit.ts` + `rate_limits` table, RLS-locked, fail-open) and generic auth error copy (Supabase messages never surface raw). Remember to `npm run db:migrate:deploy` for the `rate_limits` migration.
 - ✅ **CSP (report-only)** added to the security headers (`next.config.ts`): observe violations first, then promote to enforcing (nonce-based `script-src` is the follow-up).
+- ✅ **Vercel deployment prep** complete (code-side): `vercel.json` pins functions to `hnd1` (colocated with the `ap-northeast-1` Supabase project), `next.config.ts` adds `poweredByHeader: false` + AVIF/WebP image formats + `optimizePackageImports` for the `radix-ui` barrel, `src/lib/env.ts` refuses a production boot when `NEXT_PUBLIC_SITE_URL` isn't https, and SETUP.md §8 is now the full deployment runbook (env vars, manual-migration rule, Supabase URL config, post-deploy checklist). Deploy itself not done — follow SETUP.md §8.
 - ⚠️ **Supabase built-in SMTP did not deliver** during verification (auth links were verified via admin `generateLink` instead). Configure custom SMTP before any real users need auth emails. Also confirm the dashboard email templates match SETUP.md §3 (incl. the Reset Password template).
 
 ## Where the context lives
@@ -73,6 +74,7 @@ npm run dev             # http://localhost:3000
 1. **Remaining modules** — Timeline → Reports → Administration, one PR each (build → tests → docs/10 + HANDOFF → PR).
 2. **Custom SMTP + Supabase dashboard hygiene** (min password ≥ 8, leaked-password protection, redirect allowlist) before real users; apply the `rate_limits` migration (`npm run db:migrate:deploy`).
 3. **Doc 08 — Design System** (grid, spacing, type, components, states) — the shell currently leans on shadcn defaults.
-4. Later platform chores: org/rollout editing + soft-delete Prisma extension (docs/09), **custom SMTP** for auth emails (built-in sender unreliable), **Vercel deployment** (SETUP.md §8).
+4. **First Vercel deploy** — prep is done; follow SETUP.md §8 (apply the pending `rate_limits` migration first).
+5. Later platform chores: org/rollout editing + soft-delete Prisma extension (docs/09), **custom SMTP** for auth emails (built-in sender unreliable).
 
 Nothing is stranded in any past chat — this repo is the single source of truth.

@@ -37,6 +37,20 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Don't advertise the framework in responses.
+  poweredByHeader: false,
+  images: {
+    // Serve AVIF where the browser supports it, WebP otherwise. No
+    // remotePatterns on purpose: remote image hosts are denied until one is
+    // deliberately allowed here.
+    formats: ['image/avif', 'image/webp'],
+  },
+  experimental: {
+    // The consolidated `radix-ui` package is one large barrel; rewrite its
+    // imports to direct paths so unused primitives stay out of the bundle
+    // (lucide-react is already covered by Next's built-in list).
+    optimizePackageImports: ['radix-ui'],
+  },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },

@@ -95,13 +95,66 @@ npm run dev
 
 ## 8. Deploy to Vercel
 
-1. Import the GitHub repo into Vercel (framework auto-detected; build command `next build`, Node 22).
-2. Set all six environment variables from step 4 for the **Production** environment, with `NEXT_PUBLIC_SITE_URL` = the production URL. Missing required vars fail the deploy at boot by design (`src/lib/env.ts`).
-3. Migrations do **not** run automatically. Apply them against production before (or immediately after) each deploy that includes new migrations:
-   ```bash
-   npm run db:migrate:deploy   # with production DATABASE_URL/DIRECT_URL in the environment
-   ```
-4. Back in Supabase: update **Site URL** to the production domain and add it to **Redirect URLs** (step 2).
+Everything code-side is prepared: `vercel.json` pins functions to `hnd1` (Tokyo — same region as the Supabase project, `ap-northeast-1`), security headers + report-only CSP ship from `next.config.ts`, image responses are served as AVIF/WebP, and `src/lib/env.ts` fails the boot if production configuration is missing or insecure.
+
+### 8.1 Before the first deploy
+
+- [ ] All migrations applied to the production database (`npm run db:migrate:deploy` — includes `rate_limits`, which auth rate limiting writes to; without it the limiter fails open and logs errors).
+- [ ] `supabase/setup.sql` has been run (step 6).
+- [ ] **Custom SMTP configured** (Supabase → Settings → Auth). The built-in sender is unreliable — auth emails (confirm/magic-link/reset) will not reliably reach real users without it.
+- [ ] Dashboard hygiene: minimum password length ≥ 8, leaked-password protection ON (Authentication → Sign In / Up).
+
+### 8.2 Import the project
+
+1. Vercel dashboard → **Add New → Project** → import `ftmanhladhw/rollout-os`.
+2. Framework preset **Next.js** is auto-detected; keep the default build command (`next build`). Node 22 is selected automatically from `engines` in `package.json`.
+3. Do **not** deploy yet — set the environment variables first (a deploy without them fails at boot by design).
+
+### 8.3 Environment variables (Production environment)
+
+Same six values as step 4, with production values:
+
+| Variable                        | Production value                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| `DATABASE_URL`                  | Transaction-pooler string (port 6543, `?pgbouncer=true`)                      |
+| `DIRECT_URL`                    | Direct connection string (port 5432)                                          |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Project URL                                                                   |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `anon` key (safe for the browser; RLS is the boundary)                        |
+| `SUPABASE_SERVICE_ROLE_KEY`     | `service_role` key — **Production scope only, never Preview**; bypasses RLS   |
+| `NEXT_PUBLIC_SITE_URL`          | The deployed origin, e.g. `https://rollout-os.vercel.app` — **must be https** |
+
+Notes:
+
+- `NEXT_PUBLIC_SITE_URL` is enforced at boot: production refuses to start on `http://` or localhost (`src/lib/env.ts`), because auth email links are minted from it.
+- Never set `SKIP_ENV_VALIDATION` on Vercel — it exists for credential-less CI builds only.
+- Preview deployments: either leave the variables Production-scoped (previews then fail at boot — acceptable) or point Preview at a separate staging Supabase project. **Never point previews at the production database.**
+
+### 8.4 Migrations are manual, always
+
+Vercel builds do **not** run migrations. For every deploy that includes a new `prisma/migrations/` entry, apply it against production first:
+
+```bash
+npm run db:migrate:deploy   # with production DATABASE_URL/DIRECT_URL in the local environment
+```
+
+Deploy order: migrate → deploy (the schema must be ready before the new code lands).
+
+### 8.5 Point Supabase at the deployed domain
+
+In **Authentication → URL Configuration**:
+
+1. **Site URL** → the production domain (this is `{{ .SiteURL }}` in the email templates from step 3).
+2. **Redirect URLs** → add `https://<production-domain>/**` (keep the localhost entry for local dev).
+
+### 8.6 Post-deploy verification
+
+- [ ] Visiting the production URL signed out redirects to `/login`; `/programs` etc. deny unauthenticated access (default-deny middleware).
+- [ ] Full auth pass: signup → confirmation email → landing signed in → sign out → password login → magic link → password reset.
+- [ ] Response headers present (browser devtools or `curl -sI`): `Strict-Transport-Security`, `X-Frame-Options: DENY`, `Content-Security-Policy-Report-Only`; no `X-Powered-By`.
+- [ ] Repeat a failed login ~10× quickly → rate-limit message appears (proves the `rate_limits` table is live).
+- [ ] Watch the browser console for CSP violation reports for a few sessions, then promote the CSP from report-only to enforcing (`next.config.ts`).
+
+> If the Supabase project ever moves region, update `regions` in `vercel.json` to match — functions and database should stay colocated.
 
 ## Security posture (already wired in code)
 
