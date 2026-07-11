@@ -24,7 +24,7 @@ export default async function CommandCenterPage() {
   const rollout = await db.rollout.findFirst({
     where: { organizationId: state?.organization?.id, deletedAt: null },
     orderBy: { createdAt: 'asc' },
-    select: { name: true },
+    select: { id: true, name: true },
   });
 
   return (
@@ -47,7 +47,7 @@ export default async function CommandCenterPage() {
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <MyWork />
-          <RecentActivity />
+          {rollout ? <RecentActivity rolloutId={rollout.id} /> : null}
         </div>
       </div>
     </div>

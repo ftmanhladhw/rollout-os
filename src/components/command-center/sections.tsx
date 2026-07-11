@@ -1,18 +1,15 @@
 import { CircleAlert, CircleCheckBig, ListChecks, OctagonAlert } from 'lucide-react';
+import { db } from '@/lib/db';
 import { SectionCard, SectionList, SectionRow } from './section-card';
 import { StatusDot } from './vital-signs';
-import {
-  blockers,
-  myWork,
-  recentActivity,
-  todaysPriorities,
-  upcomingMilestones,
-} from './placeholder-data';
+import { activityText, timeAgo } from './activity-format';
+import { blockers, myWork, todaysPriorities, upcomingMilestones } from './placeholder-data';
 
 /**
  * The Command Center body sections. Same anatomy everywhere (SectionCard);
- * every section links into the module that owns its data. Content is
- * placeholder — see placeholder-data.ts.
+ * every section links into the module that owns its data. Recent Activity
+ * reads the live activity log; the other sections are still placeholder —
+ * see placeholder-data.ts.
  */
 
 export function TodaysPriorities() {
@@ -112,26 +109,54 @@ export function MyWork() {
   );
 }
 
-export function RecentActivity() {
+export async function RecentActivity({ rolloutId }: { rolloutId: string }) {
+  const entries = await db.activityLog.findMany({
+    where: { rolloutId },
+    orderBy: { createdAt: 'desc' },
+    take: 8,
+    select: {
+      id: true,
+      verb: true,
+      entityType: true,
+      entityName: true,
+      createdAt: true,
+      actor: { select: { displayName: true, email: true } },
+    },
+  });
+  const now = new Date();
+
   return (
-    <SectionCard title="Recent activity" href="/knowledge" hrefLabel="Knowledge">
-      <SectionList>
-        {recentActivity.map((item) => (
-          <SectionRow key={`${item.actor}-${item.text}`}>
-            <span
-              aria-hidden="true"
-              className="bg-muted text-muted-foreground grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-medium"
-            >
-              {item.actor.charAt(0)}
-            </span>
-            <span className="min-w-0 flex-1 text-sm">
-              <span className="font-medium">{item.actor}</span>{' '}
-              <span className="text-muted-foreground">{item.text}</span>
-            </span>
-            <span className="text-muted-foreground shrink-0 text-xs">{item.when}</span>
-          </SectionRow>
-        ))}
-      </SectionList>
+    <SectionCard title="Recent activity" href="/operations" hrefLabel="Operations">
+      {entries.length === 0 ? (
+        <p className="text-muted-foreground px-4 py-6 text-sm">
+          Nothing yet — every create, edit, and archive lands here as the team works.
+        </p>
+      ) : (
+        <SectionList>
+          {entries.map((entry) => {
+            const actor = entry.actor?.displayName || entry.actor?.email || 'Someone';
+            return (
+              <SectionRow key={entry.id}>
+                <span
+                  aria-hidden="true"
+                  className="bg-muted text-muted-foreground grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-medium"
+                >
+                  {actor.charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1 text-sm">
+                  <span className="font-medium">{actor}</span>{' '}
+                  <span className="text-muted-foreground">
+                    {activityText(entry.verb, entry.entityType, entry.entityName)}
+                  </span>
+                </span>
+                <span className="text-muted-foreground shrink-0 text-xs">
+                  {timeAgo(entry.createdAt, now)}
+                </span>
+              </SectionRow>
+            );
+          })}
+        </SectionList>
+      )}
     </SectionCard>
   );
 }

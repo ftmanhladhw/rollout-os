@@ -108,10 +108,4 @@ export const myWork = [
   { title: 'Prepare weekly status inputs', kind: 'Task', due: 'Fri' },
 ];
 
-export const recentActivity = [
-  { actor: 'Priya N.', text: 'moved “Training content” to In progress', when: '2h ago' },
-  { actor: 'Jonas K.', text: 'raised blocker “Sandbox credentials pending”', when: '4h ago' },
-  { actor: 'Mei L.', text: 'marked Security readiness as Ready', when: 'Yesterday' },
-  { actor: 'Tomás R.', text: 'added decision “Wave 2 scope frozen”', when: 'Yesterday' },
-  { actor: 'Priya N.', text: 'completed “Tenant data audit — Wave 1”', when: '2 days ago' },
-];
+// recentActivity placeholder removed — the section reads the live activity log.

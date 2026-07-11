@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { logActivity } from '@/lib/activity';
 import { assertCan, type Action } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getRolloutContext, type RolloutContext } from '@/lib/rollout';
@@ -109,6 +110,14 @@ export async function updateRollout(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Rollout not found.' };
+  await logActivity({
+    rolloutId: rollout.id,
+    actorId: userId,
+    verb: 'updated',
+    entityType: 'rollout',
+    entityId: rollout.id,
+    entityName: parsed.data.name,
+  });
   revalidatePath('/', 'layout');
   return { success: 'Saved.' };
 }
@@ -123,5 +132,20 @@ export async function updateReadiness(input: unknown): Promise<ActionResult> {
     data: { status: parsed.data.status, updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Dimension not found.' };
+
+  // Readiness has no entity_type of its own: the assessment is a rollout
+  // field (docs/05), so the feed entry names the dimension on the rollout.
+  const dimension = await db.readinessDimension.findUnique({
+    where: { id: parsed.data.id },
+    select: { name: true },
+  });
+  await logActivity({
+    rolloutId: rollout.id,
+    actorId: userId,
+    verb: 'status_changed',
+    entityType: 'rollout',
+    entityId: rollout.id,
+    entityName: `${dimension?.name ?? 'readiness'} readiness`,
+  });
   return done('Saved.');
 }

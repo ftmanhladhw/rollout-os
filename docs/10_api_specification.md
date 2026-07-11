@@ -28,6 +28,14 @@ public API ships later, it inherits these semantics.
 6. **Result contract.** Actions return `{ error: string }` for the form,
    `{ success: string }` for in-place saves, or redirect on
    create/archive/flow transitions.
+7. **Activity logging.** After a successful write, every mutation appends to
+   `activity_log` via `logActivity` (`src/lib/activity.ts`) — the audit
+   trail and the Command Center feed. Append-only; `entity_name` is
+   denormalized so entries outlive archival; a failed log write is reported
+   (`console.error`) but never fails the user's mutation. Soft delete logs
+   as verb `deleted` and renders as "archived". Member management is the
+   one unlogged mutation family (org-scoped; `activity_log` rows are
+   rollout-scoped — an org-level audit surface is future work).
 
 ## Onboarding (`src/app/onboarding/actions.ts`)
 

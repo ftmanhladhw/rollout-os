@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { Prisma } from '@prisma/client';
+import { logActivity } from '@/lib/activity';
 import { assertCan, getAuthzContext, DEFAULT_EXPERIENCE_PROFILE } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { createClient } from '@/lib/supabase/server';
@@ -96,7 +97,7 @@ export async function createFirstRollout(input: unknown): Promise<ActionResult> 
   assertCan(ctx, 'rollout:create');
 
   const { name, goLiveDate } = parsed.data;
-  await db.rollout.create({
+  const rollout = await db.rollout.create({
     data: {
       organizationId: state.organization.id,
       name,
@@ -121,6 +122,15 @@ export async function createFirstRollout(input: unknown): Promise<ActionResult> 
         },
       },
     },
+    select: { id: true },
+  });
+  await logActivity({
+    rolloutId: rollout.id,
+    actorId: state.userId,
+    verb: 'created',
+    entityType: 'rollout',
+    entityId: rollout.id,
+    entityName: name,
   });
 
   revalidatePath('/', 'layout');

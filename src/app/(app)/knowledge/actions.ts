@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import type { ActivityVerb, EntityType } from '@prisma/client';
+import { logActivity } from '@/lib/activity';
 import { assertCan, type Action } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getRolloutContext, type RolloutContext } from '@/lib/rollout';
@@ -43,6 +45,39 @@ function done(message: string): ActionResult {
   return { success: message };
 }
 
+/** Log the mutation to the activity feed, then revalidate and return. */
+async function logged(
+  message: string,
+  ctx: { rollout: { id: string }; userId: string },
+  verb: ActivityVerb,
+  entityType: EntityType,
+  entityId: string,
+  entityName: string,
+): Promise<ActionResult> {
+  await logActivity({
+    rolloutId: ctx.rollout.id,
+    actorId: ctx.userId,
+    verb,
+    entityType,
+    entityId,
+    entityName,
+  });
+  return done(message);
+}
+
+/** Denormalized name for archive log entries (the soft-deleted row remains). */
+const NAME_LOOKUP = {
+  document: (id: string) => db.document.findUnique({ where: { id }, select: { name: true } }),
+  meeting: (id: string) => db.meeting.findUnique({ where: { id }, select: { name: true } }),
+  note: (id: string) => db.note.findUnique({ where: { id }, select: { name: true } }),
+  update: (id: string) => db.update.findUnique({ where: { id }, select: { name: true } }),
+} satisfies Partial<Record<EntityType, (id: string) => Promise<{ name: string } | null>>>;
+
+async function archivedName(model: keyof typeof NAME_LOOKUP, id: string): Promise<string> {
+  const row = await NAME_LOOKUP[model](id);
+  return row?.name ?? model;
+}
+
 /**
  * A phase reference must be a live phase of the caller's rollout — the FK
  * alone would accept another rollout's phase id (docs/09 §2 consistency is
@@ -64,7 +99,7 @@ export async function createDocument(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the fields.' };
   const { rollout, userId } = await guarded('knowledge:contribute');
 
-  await db.document.create({
+  const document = await db.document.create({
     data: {
       rolloutId: rollout.id,
       name: parsed.data.name,
@@ -74,8 +109,16 @@ export async function createDocument(input: unknown): Promise<ActionResult> {
       version: parsed.data.version,
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Document referenced.');
+  return logged(
+    'Document referenced.',
+    { rollout, userId },
+    'created',
+    'document',
+    document.id,
+    parsed.data.name,
+  );
 }
 
 export async function updateDocument(input: unknown): Promise<ActionResult> {
@@ -94,7 +137,7 @@ export async function updateDocument(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Document not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'document', id, parsed.data.name);
 }
 
 export async function archiveDocument(input: unknown): Promise<ActionResult> {
@@ -107,7 +150,14 @@ export async function archiveDocument(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Document not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'document',
+    parsed.data.id,
+    await archivedName('document', parsed.data.id),
+  );
 }
 
 // --- Meetings ---
@@ -118,7 +168,7 @@ export async function createMeeting(input: unknown): Promise<ActionResult> {
   const { rollout, userId } = await guarded('knowledge:manage');
   if (!(await phaseIsValid(parsed.data.phaseId, rollout.id))) return { error: 'Phase not found.' };
 
-  await db.meeting.create({
+  const meeting = await db.meeting.create({
     data: {
       rolloutId: rollout.id,
       name: parsed.data.name,
@@ -130,8 +180,16 @@ export async function createMeeting(input: unknown): Promise<ActionResult> {
       phaseId: parsed.data.phaseId,
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Meeting recorded.');
+  return logged(
+    'Meeting recorded.',
+    { rollout, userId },
+    'created',
+    'meeting',
+    meeting.id,
+    parsed.data.name,
+  );
 }
 
 export async function updateMeeting(input: unknown): Promise<ActionResult> {
@@ -156,7 +214,7 @@ export async function updateMeeting(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Meeting not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'meeting', id, parsed.data.name);
 }
 
 export async function archiveMeeting(input: unknown): Promise<ActionResult> {
@@ -169,7 +227,14 @@ export async function archiveMeeting(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Meeting not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'meeting',
+    parsed.data.id,
+    await archivedName('meeting', parsed.data.id),
+  );
 }
 
 // --- Notes ---
@@ -179,15 +244,16 @@ export async function createNote(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the fields.' };
   const { rollout, userId } = await guarded('knowledge:contribute');
 
-  await db.note.create({
+  const note = await db.note.create({
     data: {
       rolloutId: rollout.id,
       name: parsed.data.name,
       body: parsed.data.body,
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Note added.');
+  return logged('Note added.', { rollout, userId }, 'created', 'note', note.id, parsed.data.name);
 }
 
 export async function updateNote(input: unknown): Promise<ActionResult> {
@@ -205,7 +271,7 @@ export async function updateNote(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Note not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'note', id, parsed.data.name);
 }
 
 export async function archiveNote(input: unknown): Promise<ActionResult> {
@@ -218,7 +284,14 @@ export async function archiveNote(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Note not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'note',
+    parsed.data.id,
+    await archivedName('note', parsed.data.id),
+  );
 }
 
 // --- Updates ---
@@ -228,7 +301,7 @@ export async function createUpdate(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the fields.' };
   const { rollout, userId } = await guarded('knowledge:manage');
 
-  await db.update.create({
+  const update = await db.update.create({
     data: {
       rolloutId: rollout.id,
       name: parsed.data.name,
@@ -236,8 +309,16 @@ export async function createUpdate(input: unknown): Promise<ActionResult> {
       body: parsed.data.body,
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Update published.');
+  return logged(
+    'Update published.',
+    { rollout, userId },
+    'created',
+    'update',
+    update.id,
+    parsed.data.name,
+  );
 }
 
 export async function updateUpdate(input: unknown): Promise<ActionResult> {
@@ -255,7 +336,7 @@ export async function updateUpdate(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Update not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'update', id, parsed.data.name);
 }
 
 export async function archiveUpdate(input: unknown): Promise<ActionResult> {
@@ -268,5 +349,12 @@ export async function archiveUpdate(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Update not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'update',
+    parsed.data.id,
+    await archivedName('update', parsed.data.id),
+  );
 }
