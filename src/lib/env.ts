@@ -50,6 +50,16 @@ const envSchema = z
         });
       }
     }
+    // Auth email links are built from SITE_URL — a production deploy still
+    // pointing at localhost (or plain http) would mint broken/insecure links,
+    // silently. Fail the boot instead.
+    if (!vars.NEXT_PUBLIC_SITE_URL.startsWith('https://')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEXT_PUBLIC_SITE_URL'],
+        message: 'Must be the https:// production origin in production',
+      });
+    }
   });
 
 export type Env = z.infer<typeof envSchema>;
