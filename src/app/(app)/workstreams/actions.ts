@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { logActivity } from '@/lib/activity';
 import { assertCan } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getRolloutContext } from '@/lib/rollout';
@@ -45,6 +46,14 @@ export async function createWorkstream(input: unknown): Promise<ActionResult> {
     },
     select: { id: true },
   });
+  await logActivity({
+    rolloutId: context.rollout.id,
+    actorId: context.ctx.userId,
+    verb: 'created',
+    entityType: 'workstream',
+    entityId: workstream.id,
+    entityName: parsed.data.name,
+  });
 
   revalidatePath('/workstreams');
   revalidatePath(`/programs/${programme.id}`);
@@ -73,6 +82,14 @@ export async function updateWorkstream(input: unknown): Promise<ActionResult> {
   if (result.count === 0) {
     return { error: 'Workstream not found.' };
   }
+  await logActivity({
+    rolloutId: context.rollout.id,
+    actorId: context.ctx.userId,
+    verb: 'updated',
+    entityType: 'workstream',
+    entityId: id,
+    entityName: parsed.data.name,
+  });
 
   revalidatePath('/workstreams');
   revalidatePath(`/workstreams/${id}`);
@@ -96,6 +113,18 @@ export async function archiveWorkstream(input: unknown): Promise<ActionResult> {
   if (result.count === 0) {
     return { error: 'Workstream not found.' };
   }
+  const archived = await db.workstream.findUnique({
+    where: { id: parsed.data.id },
+    select: { name: true },
+  });
+  await logActivity({
+    rolloutId: context.rollout.id,
+    actorId: context.ctx.userId,
+    verb: 'deleted',
+    entityType: 'workstream',
+    entityId: parsed.data.id,
+    entityName: archived?.name ?? 'workstream',
+  });
 
   revalidatePath('/workstreams');
   redirect('/workstreams');

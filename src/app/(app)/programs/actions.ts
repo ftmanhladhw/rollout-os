@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { logActivity } from '@/lib/activity';
 import { assertCan } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getRolloutContext } from '@/lib/rollout';
@@ -36,6 +37,14 @@ export async function createProgramme(input: unknown): Promise<ActionResult> {
     },
     select: { id: true },
   });
+  await logActivity({
+    rolloutId: context.rollout.id,
+    actorId: context.ctx.userId,
+    verb: 'created',
+    entityType: 'programme',
+    entityId: programme.id,
+    entityName: parsed.data.name,
+  });
 
   revalidatePath('/programs');
   redirect(`/programs/${programme.id}`);
@@ -63,6 +72,14 @@ export async function updateProgramme(input: unknown): Promise<ActionResult> {
   if (result.count === 0) {
     return { error: 'Programme not found.' };
   }
+  await logActivity({
+    rolloutId: context.rollout.id,
+    actorId: context.ctx.userId,
+    verb: 'updated',
+    entityType: 'programme',
+    entityId: id,
+    entityName: parsed.data.name,
+  });
 
   revalidatePath('/programs');
   revalidatePath(`/programs/${id}`);
@@ -86,6 +103,18 @@ export async function archiveProgramme(input: unknown): Promise<ActionResult> {
   if (result.count === 0) {
     return { error: 'Programme not found.' };
   }
+  const archived = await db.programme.findUnique({
+    where: { id: parsed.data.id },
+    select: { name: true },
+  });
+  await logActivity({
+    rolloutId: context.rollout.id,
+    actorId: context.ctx.userId,
+    verb: 'deleted',
+    entityType: 'programme',
+    entityId: parsed.data.id,
+    entityName: archived?.name ?? 'programme',
+  });
 
   revalidatePath('/programs');
   redirect('/programs');

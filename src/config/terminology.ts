@@ -1,5 +1,7 @@
 import type {
+  ActivityVerb,
   DocumentType,
+  EntityType,
   ExperienceProfile,
   Health,
   LifecycleStatus,
@@ -87,6 +89,37 @@ export const EXPERIENCE_PROFILE_LABELS: Record<ExperienceProfile, string> = {
   engineering: 'Engineering',
   consultant: 'Consultant',
   client: 'Client',
+};
+
+/** Lowercase on purpose: these read mid-sentence in the activity feed. */
+export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
+  rollout: 'rollout',
+  programme: 'programme',
+  workstream: 'workstream',
+  milestone: 'milestone',
+  task: 'task',
+  risk: 'risk',
+  issue: 'issue',
+  decision: 'decision',
+  dependency: 'dependency',
+  action_item: 'action item',
+  deliverable: 'deliverable',
+  document: 'document',
+  meeting: 'meeting',
+  note: 'note',
+  update: 'update',
+  stakeholder: 'stakeholder',
+  team: 'team',
+  partner: 'partner',
+};
+
+/** Feed verb copy: soft delete reads as "archived" (docs/09 semantics). */
+export const ACTIVITY_VERB_LABELS: Record<ActivityVerb, string> = {
+  created: 'created',
+  updated: 'updated',
+  deleted: 'archived',
+  status_changed: 'changed the status of',
+  assigned: 'assigned',
 };
 
 /**

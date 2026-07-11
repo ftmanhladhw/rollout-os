@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import type { ActivityVerb, EntityType } from '@prisma/client';
+import { logActivity } from '@/lib/activity';
 import { assertCan, type Action } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getRolloutContext, type RolloutContext } from '@/lib/rollout';
@@ -46,6 +48,40 @@ function done(message: string): ActionResult {
   return { success: message };
 }
 
+/** Log the mutation to the activity feed, then revalidate and return. */
+async function logged(
+  message: string,
+  ctx: { rollout: { id: string }; userId: string },
+  verb: ActivityVerb,
+  entityType: EntityType,
+  entityId: string,
+  entityName: string,
+): Promise<ActionResult> {
+  await logActivity({
+    rolloutId: ctx.rollout.id,
+    actorId: ctx.userId,
+    verb,
+    entityType,
+    entityId,
+    entityName,
+  });
+  return done(message);
+}
+
+/** Denormalized name for archive log entries (the soft-deleted row remains). */
+const NAME_LOOKUP = {
+  milestone: (id: string) => db.milestone.findUnique({ where: { id }, select: { name: true } }),
+  task: (id: string) => db.task.findUnique({ where: { id }, select: { name: true } }),
+  risk: (id: string) => db.risk.findUnique({ where: { id }, select: { name: true } }),
+  issue: (id: string) => db.issue.findUnique({ where: { id }, select: { name: true } }),
+  decision: (id: string) => db.decision.findUnique({ where: { id }, select: { name: true } }),
+} satisfies Partial<Record<EntityType, (id: string) => Promise<{ name: string } | null>>>;
+
+async function archivedName(model: keyof typeof NAME_LOOKUP, id: string): Promise<string> {
+  const row = await NAME_LOOKUP[model](id);
+  return row?.name ?? model;
+}
+
 /**
  * A phase reference must be a live phase of the caller's rollout — the FK
  * alone would accept another rollout's phase id (docs/09 §2 consistency is
@@ -74,7 +110,7 @@ export async function createMilestone(input: unknown): Promise<ActionResult> {
   if (!workstream) return { error: 'Workstream not found.' };
   if (!(await phaseIsValid(parsed.data.phaseId, rollout.id))) return { error: 'Phase not found.' };
 
-  await db.milestone.create({
+  const milestone = await db.milestone.create({
     data: {
       rolloutId: rollout.id,
       workstreamId: workstream.id,
@@ -84,8 +120,16 @@ export async function createMilestone(input: unknown): Promise<ActionResult> {
       phaseId: parsed.data.phaseId,
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Milestone created.');
+  return logged(
+    'Milestone created.',
+    { rollout, userId },
+    'created',
+    'milestone',
+    milestone.id,
+    parsed.data.name,
+  );
 }
 
 export async function updateMilestone(input: unknown): Promise<ActionResult> {
@@ -106,7 +150,7 @@ export async function updateMilestone(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Milestone not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'milestone', id, parsed.data.name);
 }
 
 export async function archiveMilestone(input: unknown): Promise<ActionResult> {
@@ -119,7 +163,14 @@ export async function archiveMilestone(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Milestone not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'milestone',
+    parsed.data.id,
+    await archivedName('milestone', parsed.data.id),
+  );
 }
 
 // --- Tasks ---
@@ -135,7 +186,7 @@ export async function createTask(input: unknown): Promise<ActionResult> {
   });
   if (!milestone) return { error: 'Milestone not found.' };
 
-  await db.task.create({
+  const task = await db.task.create({
     data: {
       rolloutId: rollout.id,
       milestoneId: milestone.id,
@@ -144,8 +195,9 @@ export async function createTask(input: unknown): Promise<ActionResult> {
       dueDate: toDate(parsed.data.dueDate),
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Task created.');
+  return logged('Task created.', { rollout, userId }, 'created', 'task', task.id, parsed.data.name);
 }
 
 export async function updateTask(input: unknown): Promise<ActionResult> {
@@ -165,7 +217,7 @@ export async function updateTask(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Task not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'task', id, parsed.data.name);
 }
 
 export async function archiveTask(input: unknown): Promise<ActionResult> {
@@ -178,7 +230,14 @@ export async function archiveTask(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Task not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'task',
+    parsed.data.id,
+    await archivedName('task', parsed.data.id),
+  );
 }
 
 // --- Risks ---
@@ -192,7 +251,7 @@ export async function createRisk(input: unknown): Promise<ActionResult> {
   // stakeholders, the creator owns the risks they raise.
   const ownerId = await getOrCreateSelfStakeholder(rollout.id, userId);
 
-  await db.risk.create({
+  const risk = await db.risk.create({
     data: {
       rolloutId: rollout.id,
       ownerId,
@@ -203,8 +262,9 @@ export async function createRisk(input: unknown): Promise<ActionResult> {
       mitigation: parsed.data.mitigation,
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Risk created.');
+  return logged('Risk created.', { rollout, userId }, 'created', 'risk', risk.id, parsed.data.name);
 }
 
 export async function updateRisk(input: unknown): Promise<ActionResult> {
@@ -223,7 +283,7 @@ export async function updateRisk(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Risk not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'risk', id, parsed.data.name);
 }
 
 export async function archiveRisk(input: unknown): Promise<ActionResult> {
@@ -236,7 +296,14 @@ export async function archiveRisk(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Risk not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'risk',
+    parsed.data.id,
+    await archivedName('risk', parsed.data.id),
+  );
 }
 
 // --- Issues ---
@@ -246,15 +313,23 @@ export async function createIssue(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the fields.' };
   const { rollout, userId } = await guarded('operations:execute');
 
-  await db.issue.create({
+  const issue = await db.issue.create({
     data: {
       rolloutId: rollout.id,
       name: parsed.data.name,
       description: parsed.data.description,
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Issue created.');
+  return logged(
+    'Issue created.',
+    { rollout, userId },
+    'created',
+    'issue',
+    issue.id,
+    parsed.data.name,
+  );
 }
 
 export async function updateIssue(input: unknown): Promise<ActionResult> {
@@ -274,7 +349,7 @@ export async function updateIssue(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Issue not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'issue', id, parsed.data.name);
 }
 
 export async function archiveIssue(input: unknown): Promise<ActionResult> {
@@ -287,7 +362,14 @@ export async function archiveIssue(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Issue not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'issue',
+    parsed.data.id,
+    await archivedName('issue', parsed.data.id),
+  );
 }
 
 // --- Decisions ---
@@ -300,7 +382,7 @@ export async function createDecision(input: unknown): Promise<ActionResult> {
   // Domain Rule 7: a decision affects an entity. In this slice every
   // decision affects the rollout itself; finer targets come with later
   // modules.
-  await db.decision.create({
+  const decision = await db.decision.create({
     data: {
       rolloutId: rollout.id,
       affectsEntityType: 'rollout',
@@ -311,8 +393,16 @@ export async function createDecision(input: unknown): Promise<ActionResult> {
       decisionDate: toDate(parsed.data.decisionDate),
       createdBy: userId,
     },
+    select: { id: true },
   });
-  return done('Decision recorded.');
+  return logged(
+    'Decision recorded.',
+    { rollout, userId },
+    'created',
+    'decision',
+    decision.id,
+    parsed.data.name,
+  );
 }
 
 export async function updateDecision(input: unknown): Promise<ActionResult> {
@@ -332,7 +422,7 @@ export async function updateDecision(input: unknown): Promise<ActionResult> {
     },
   });
   if (result.count === 0) return { error: 'Decision not found.' };
-  return done('Saved.');
+  return logged('Saved.', { rollout, userId }, 'updated', 'decision', id, parsed.data.name);
 }
 
 export async function archiveDecision(input: unknown): Promise<ActionResult> {
@@ -345,5 +435,12 @@ export async function archiveDecision(input: unknown): Promise<ActionResult> {
     data: { deletedAt: new Date(), updatedBy: userId },
   });
   if (result.count === 0) return { error: 'Decision not found.' };
-  return done('Archived.');
+  return logged(
+    'Archived.',
+    { rollout, userId },
+    'deleted',
+    'decision',
+    parsed.data.id,
+    await archivedName('decision', parsed.data.id),
+  );
 }
