@@ -5,7 +5,8 @@ import { LifecycleStatusBadge } from '@/components/lifecycle-status-badge';
 import { can } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getRolloutContext } from '@/lib/rollout';
-import { goLiveCountdown, groupByPhase, type TimelineItem } from './lib';
+import { goLiveCountdown } from '@/lib/rollout-metrics';
+import { groupByPhase, type TimelineItem } from './lib';
 
 export const metadata: Metadata = { title: 'Timeline' };
 

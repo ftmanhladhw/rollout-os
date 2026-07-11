@@ -9,7 +9,8 @@ import {
 import { db } from '@/lib/db';
 import type { RolloutContext } from '@/lib/rollout';
 import { can } from '@/lib/authz';
-import { averageProgress, rankRisks, readinessSummary, riskSeverity, windowStart } from './lib';
+import { averageProgress, readinessSummary } from '@/lib/rollout-metrics';
+import { rankRisks, riskSeverity, windowStart } from './lib';
 
 /**
  * The four MVP reports (docs/07: Executive · Weekly · Risk · Readiness —
