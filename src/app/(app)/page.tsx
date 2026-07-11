@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { VitalSigns } from '@/components/command-center/vital-signs';
 import {
   Blockers,
@@ -7,47 +8,38 @@ import {
   TodaysPriorities,
   UpcomingMilestones,
 } from '@/components/command-center/sections';
-import { db } from '@/lib/db';
-import { getOnboardingState } from '@/lib/onboarding';
+import { getRolloutContext } from '@/lib/rollout';
 
 export const metadata: Metadata = { title: 'Command Center' };
 
 /**
  * The Command Center — Mission Control, not a dashboard (docs/07 ch.1).
- * Layout and information architecture are real; section content is
- * placeholder until each owning module lands (see placeholder-data.ts).
- * Priority order per docs/07: vitals → what needs attention → what's coming
- * → my slice → what changed.
+ * Fully live: every tile and section is a projection of the operational
+ * dataset, owned by the module it links to. Priority order per docs/07:
+ * vitals → what needs attention → what's coming → my slice → what changed.
  */
 export default async function CommandCenterPage() {
-  const state = await getOnboardingState();
-  const rollout = await db.rollout.findFirst({
-    where: { organizationId: state?.organization?.id, deletedAt: null },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true, name: true },
-  });
+  const context = await getRolloutContext();
+  if (!context) redirect('/onboarding');
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Command Center</h1>
-        <p className="text-muted-foreground text-sm">{rollout?.name}</p>
-        <p className="text-muted-foreground/70 ml-auto text-xs">
-          Sample data — wiring lands with each module
-        </p>
+        <p className="text-muted-foreground text-sm">{context.rollout.name}</p>
       </header>
 
-      <VitalSigns />
+      <VitalSigns context={context} />
 
       <div className="grid items-start gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-          <TodaysPriorities />
-          <Blockers />
-          <UpcomingMilestones />
+          <TodaysPriorities context={context} />
+          <Blockers context={context} />
+          <UpcomingMilestones context={context} />
         </div>
         <div className="flex min-w-0 flex-col gap-6">
-          <MyWork />
-          {rollout ? <RecentActivity rolloutId={rollout.id} /> : null}
+          <MyWork context={context} />
+          <RecentActivity context={context} />
         </div>
       </div>
     </div>

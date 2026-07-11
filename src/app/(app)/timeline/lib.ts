@@ -4,6 +4,8 @@ import type { LifecycleStatus } from '@prisma/client';
  * Timeline projection helpers — pure functions over the operational dataset
  * (docs/05: views never duplicate data). The page groups dated work by the
  * rollout's configurable phases; these helpers keep that logic testable.
+ * The go-live countdown lives in @/lib/rollout-metrics (shared with the
+ * Command Center vitals).
  */
 
 export type TimelineItem = {
@@ -53,21 +55,4 @@ export function groupByPhase(
   if (unphased.length > 0) groups.push({ phase: null, items: unphased });
 
   return groups;
-}
-
-/** Whole days from `today` to `date` (UTC midnights); negative = past. */
-export function daysUntil(date: Date, today: Date): number {
-  const utc = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  return Math.round((utc(date) - utc(today)) / 86_400_000);
-}
-
-/** Human countdown for the Go Live marker. */
-export function goLiveCountdown(goLiveDate: Date | null, today: Date): string {
-  if (!goLiveDate) return 'No go-live date set';
-  const days = daysUntil(goLiveDate, today);
-  if (days > 1) return `In ${days} days`;
-  if (days === 1) return 'Tomorrow';
-  if (days === 0) return 'Today';
-  if (days === -1) return 'Yesterday';
-  return `${-days} days ago`;
 }

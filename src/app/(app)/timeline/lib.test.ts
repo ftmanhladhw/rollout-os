@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daysUntil, goLiveCountdown, groupByPhase, type TimelineItem } from './lib';
+import { groupByPhase, type TimelineItem } from './lib';
 
 const PHASES = [
   { id: 'p-discovery', name: 'Discovery' },
@@ -41,23 +41,5 @@ describe('groupByPhase', () => {
     expect(groups[2]?.items.map((i) => i.id)).toEqual(['u1', 'u2']);
 
     expect(groupByPhase(PHASES, [])).toHaveLength(2);
-  });
-});
-
-describe('go-live countdown', () => {
-  const today = new Date('2026-07-10T15:30:00Z');
-
-  it('counts whole days regardless of time of day', () => {
-    expect(daysUntil(new Date('2026-07-12T01:00:00Z'), today)).toBe(2);
-    expect(daysUntil(new Date('2026-07-08T23:00:00Z'), today)).toBe(-2);
-  });
-
-  it('renders the marker copy for future, boundary, and past dates', () => {
-    expect(goLiveCountdown(new Date('2026-08-28'), today)).toBe('In 49 days');
-    expect(goLiveCountdown(new Date('2026-07-11'), today)).toBe('Tomorrow');
-    expect(goLiveCountdown(new Date('2026-07-10'), today)).toBe('Today');
-    expect(goLiveCountdown(new Date('2026-07-09'), today)).toBe('Yesterday');
-    expect(goLiveCountdown(new Date('2026-07-01'), today)).toBe('9 days ago');
-    expect(goLiveCountdown(null, today)).toBe('No go-live date set');
   });
 });

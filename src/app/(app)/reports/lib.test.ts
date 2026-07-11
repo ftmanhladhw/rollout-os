@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { averageProgress, rankRisks, readinessSummary, riskSeverity, windowStart } from './lib';
+import { rankRisks, riskSeverity, windowStart } from './lib';
 
 describe('risk ranking', () => {
   it('scores probability × impact on a 1–9 scale', () => {
@@ -19,34 +19,8 @@ describe('risk ranking', () => {
   });
 });
 
-describe('readiness summary', () => {
-  it('is ready only when every dimension is ready', () => {
-    expect(readinessSummary([{ status: 'ready' }, { status: 'ready' }]).overall).toBe('ready');
-    expect(readinessSummary([{ status: 'ready' }, { status: 'in_progress' }]).overall).toBe(
-      'in_progress',
-    );
-    expect(readinessSummary([{ status: 'not_started' }]).overall).toBe('not_started');
-    expect(readinessSummary([]).overall).toBe('not_started');
-  });
-
-  it('counts each status bucket', () => {
-    const summary = readinessSummary([
-      { status: 'ready' },
-      { status: 'in_progress' },
-      { status: 'not_started' },
-      { status: 'not_started' },
-    ]);
-    expect(summary).toMatchObject({ ready: 1, inProgress: 1, notStarted: 2 });
-  });
-});
-
-describe('progress and windows', () => {
-  it('averages manual workstream progress, rounded, 0 when empty', () => {
-    expect(averageProgress([{ progress: 50 }, { progress: 75 }])).toBe(63);
-    expect(averageProgress([])).toBe(0);
-  });
-
-  it('computes the reporting window start', () => {
+describe('reporting window', () => {
+  it('computes the window start', () => {
     expect(windowStart(new Date('2026-07-10T12:00:00Z'), 7).toISOString()).toBe(
       '2026-07-03T12:00:00.000Z',
     );
