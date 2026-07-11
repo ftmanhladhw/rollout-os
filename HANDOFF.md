@@ -29,6 +29,7 @@ Rollout OS — a generalized **rollout & delivery command center** (plan, track,
 - ✅ **All seven modules are live.** Next: wire the remaining Command Center sections to live data, doc 08, and the platform chores below.
 - ✅ **Audit trail live**: every mutating server action appends to `activity_log` via `src/lib/activity.ts` (docs/10 convention 7); the Command Center **Recent Activity** section now reads it (first live section — the other four are still placeholder). Exception: member management (org-scoped, no rollout to log against).
 - ✅ **Auth hardening**: fixed-window rate limiting on login/signup/magic-link/reset (`src/lib/rate-limit.ts` + `rate_limits` table, RLS-locked, fail-open) and generic auth error copy (Supabase messages never surface raw). Remember to `npm run db:migrate:deploy` for the `rate_limits` migration.
+- ✅ **CSP (report-only)** added to the security headers (`next.config.ts`): observe violations first, then promote to enforcing (nonce-based `script-src` is the follow-up).
 - ⚠️ **Supabase built-in SMTP did not deliver** during verification (auth links were verified via admin `generateLink` instead). Configure custom SMTP before any real users need auth emails. Also confirm the dashboard email templates match SETUP.md §3 (incl. the Reset Password template).
 
 ## Where the context lives
