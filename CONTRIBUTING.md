@@ -4,7 +4,7 @@ Thanks for contributing! This guide covers the workflow and the quality gates th
 
 ## Prerequisites
 
-- Node.js `>= 20` (run `nvm use` to match `.nvmrc`)
+- Node.js `>= 22` (run `nvm use` to match `.nvmrc`; a Supabase dependency mandates it, and `engine-strict` fails `npm ci` on older Node)
 - npm `>= 11`
 
 ```bash
@@ -15,11 +15,9 @@ npm install   # installs dependencies and sets up Husky git hooks
 
 1. Branch off `main` using a descriptive name: `feat/<short-desc>`, `fix/<short-desc>`, `chore/<short-desc>`.
 2. Make your change. Keep commits focused.
-3. Ensure everything passes locally:
+3. Ensure every gate passes locally — one command runs them all:
    ```bash
-   npm run format:check
-   npm run lint
-   npm run build
+   npm run check   # format:check · lint · typecheck · test · build
    ```
 4. Open a pull request against `main`. CI must be green before merge.
 
@@ -57,7 +55,9 @@ This is enforced two ways:
 | Commit message  | On `git commit` | Husky + commitlint  |
 | Format check    | On PR / push    | Prettier (CI)       |
 | Lint            | On PR / push    | ESLint (CI)         |
-| Build           | On PR / push    | TypeScript (CI)     |
+| Type-check      | On PR / push    | `tsc` (CI)          |
+| Tests           | On PR / push    | Vitest (CI)         |
+| Build           | On PR / push    | `next build` (CI)   |
 | Commit messages | On PR           | commitlint (CI)     |
 
 If a git hook ever needs to be bypassed for a legitimate reason, use `git commit --no-verify` sparingly — CI will still enforce the same gates.

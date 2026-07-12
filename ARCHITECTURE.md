@@ -2,7 +2,7 @@
 
 This document describes the **code architecture** of Rollout OS. For the _product_ architecture (domain model, operational models), see [`docs/04_architecture_specification.md`](./docs/04_architecture_specification.md).
 
-> **Status:** architecture + auth + domain schema — Supabase auth (email/password, magic link), storage helpers, and the full MVP domain schema (27 tables with RLS) are in place; no product features yet. Schema design record: [`docs/09_database_design.md`](./docs/09_database_design.md). Platform setup runbook: [`SETUP.md`](./SETUP.md).
+> **Status:** MVP feature-complete — Supabase auth (email/password, magic link, password reset), the full MVP domain schema (27 tables with RLS), the authenticated app shell, onboarding, a live Command Center, and all seven lifecycle modules (Programs, Workstreams, Operations, Knowledge, Timeline, Reports, Administration) are built and wired to live data. Schema design record: [`docs/09_database_design.md`](./docs/09_database_design.md). Auth & authorization: [`docs/14`](./docs/14_auth_authorization.md). Platform setup runbook: [`SETUP.md`](./SETUP.md).
 
 ## Technology stack
 
@@ -26,20 +26,31 @@ This document describes the **code architecture** of Rollout OS. For the _produc
 rollout-os/
 ├── src/
 │   ├── app/                    # App Router: routes, layouts, pages
-│   │   ├── (auth)/             # login & signup pages, auth server actions, schemas
+│   │   ├── (auth)/             # login, signup, forgot/reset password + auth actions
+│   │   ├── (app)/              # authenticated shell + the seven lifecycle modules
+│   │   │   ├── programs/ workstreams/ operations/ knowledge/
+│   │   │   ├── timeline/ reports/ settings/          # each: page + actions + schemas (+ tests)
+│   │   │   ├── page.tsx        # Command Center (live)
+│   │   │   └── layout.tsx      # shell + first-run onboarding gate
+│   │   ├── onboarding/         # create organization → create first rollout
 │   │   ├── auth/confirm/       # email OTP verification route (signup + magic link)
 │   │   ├── layout.tsx          # root layout (fonts, metadata, providers)
-│   │   ├── page.tsx            # placeholder landing page (auth-protected)
-│   │   ├── providers.tsx       # client-side providers (TanStack Query, …)
+│   │   ├── providers.tsx       # client-side providers (TanStack Query, theme, …)
 │   │   └── globals.css         # Tailwind v4 + design tokens
 │   ├── components/
-│   │   └── ui/                 # shadcn/ui primitives (button, input, label, card)
-│   ├── config/                 # static app configuration (site.ts)
+│   │   ├── ui/                 # shadcn/ui primitives
+│   │   ├── shell/              # sidebar, header, breadcrumbs, nav, user menu
+│   │   ├── command-center/     # Command Center sections + derivation helpers
+│   │   └── entity-drawer.tsx   # universal create/edit drawer (shared across modules)
+│   ├── config/                 # static app config: site, nav, terminology, rollout defaults
 │   ├── hooks/                  # shared React hooks
 │   ├── lib/                    # framework-agnostic building blocks
 │   │   ├── db.ts               # Prisma client singleton
 │   │   ├── env.ts              # Zod-validated environment variables
-│   │   ├── utils.ts            # cn() and shared helpers
+│   │   ├── authz/              # permission matrix + can/assertCan/requireCan
+│   │   ├── rate-limit.ts       # fixed-window auth rate limiting
+│   │   ├── activity.ts         # audit-trail writer
+│   │   ├── rollout-metrics.ts  # shared metric helpers (one definition, many surfaces)
 │   │   ├── query/              # TanStack Query client factory
 │   │   └── supabase/           # Supabase clients + storage helpers
 │   ├── types/                  # shared TypeScript types
