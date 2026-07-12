@@ -3,11 +3,18 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 type CookiesToSet = { name: string; value: string; options: CookieOptions }[];
 
-/** Routes reachable without a session. Everything else requires auth. */
+/** Auth routes: reachable without a session, and bounced to `/` once signed in. */
 const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password'];
 
+/**
+ * The public founder/investor pitch. Reachable without a session, but unlike
+ * the auth routes a signed-in user is *not* redirected away from it — a founder
+ * viewing their own pitch should stay on the page.
+ */
+const PITCH_PATH = '/pitch';
+
 function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.includes(pathname) || pathname.startsWith('/auth');
+  return PUBLIC_PATHS.includes(pathname) || pathname === PITCH_PATH || pathname.startsWith('/auth');
 }
 
 /**
