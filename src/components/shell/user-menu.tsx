@@ -3,7 +3,7 @@
 import { useTransition } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
-import { LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react';
+import { LogOut, Monitor, Moon, ScrollText, Settings, Sun } from 'lucide-react';
 import { signOut } from '@/app/(auth)/actions';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,12 @@ export function UserMenu({ email }: { email: string }) {
           <Link href="/settings">
             <Settings />
             Settings
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/decisions">
+            <ScrollText />
+            Decision log
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

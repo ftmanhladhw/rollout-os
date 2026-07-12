@@ -70,8 +70,12 @@ function loadEnv(): Env {
   }
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
+    const details = Object.entries(parsed.error.flatten().fieldErrors)
+      .map(([key, messages]) => `  • ${key}: ${(messages ?? []).join('; ')}`)
+      .join('\n');
     throw new Error(
-      `Invalid environment variables:\n${JSON.stringify(parsed.error.flatten().fieldErrors, null, 2)}`,
+      `Invalid environment variables — check your .env against .env.example:\n${details}\n\n` +
+        'For CI/lint steps that do not touch the database or auth, set SKIP_ENV_VALIDATION=true.',
     );
   }
   return parsed.data;
